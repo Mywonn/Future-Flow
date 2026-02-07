@@ -2,22 +2,43 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"> 
+    <meta name="apple-mobile-web-app-title" content="Future Flow">
+    
+    <meta name="theme-color" content="#2563eb">
+
+    <link rel="apple-touch-icon" href="你的图标文件.png">
+
     <title>Future Flow Pro v2.1</title>
+    
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.min.js"></script>
+    
     <style>
         [v-cloak] { display: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
-        /* 四象限网格样式 */
         .quadrant-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; gap: 1px; background: #e5e7eb; }
         .q-cell { background: white; padding: 8px; overflow-y: auto; display: flex; flex-direction: column; }
-        /* 进度条动画 */
         .progress-bar { transition: width 0.5s ease-in-out; }
+
+        /* --- 5. 新增：核心 CSS 适配 (关键步骤) --- */
+        /* 这段代码确保内容不会被 iPhone 的刘海或底部的横条遮挡 */
+        #app {
+            /* 顶部增加安全距离，防止内容被状态栏/刘海遮挡 */
+            padding-top: env(safe-area-inset-top);
+            /* 底部增加安全距离，防止内容被 Home 条遮挡 */
+            padding-bottom: env(safe-area-inset-bottom);
+            /* 确保背景色延伸到整个屏幕 */
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen w-screen overflow-hidden flex flex-col font-sans">
@@ -709,4 +730,5 @@
     }).mount('#app');
 </script>
 </body>
+
 </html>
