@@ -113,6 +113,8 @@
         </div>
 
         <div v-if="showCalendar || ['progress', 'countdown'].includes(currentTab)" 
+            @touchstart="touchStart"
+            @touchend="touchEnd"
             class="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 p-2 animate-fade-in transition-all"
             :class="['now', 'quadrant'].includes(currentTab) ? 'absolute top-full left-0 w-full shadow-2xl z-50 rounded-b-xl' : 'shadow-inner relative'">
             
@@ -956,6 +958,36 @@
             const firstDayOfWeek = computed(() => new Date(currentYear.value, currentMonth.value, 1).getDay());
             const lunarMonthStr = computed(() => Lunar.fromDate(new Date(currentYear.value, currentMonth.value, 15)).getMonthInChinese() + "月");
             const changeMonth = (d) => { const newDate = new Date(currentYear.value, currentMonth.value + d, 1); currentYear.value = newDate.getFullYear(); currentMonth.value = newDate.getMonth(); };
+            
+
+            // === ⬇️ 在这里添加滑动逻辑代码 ⬇️ ===
+            const touchStartX = ref(0);
+            const touchEndX = ref(0);
+
+            const touchStart = (e) => {
+                // 记录手指按下的 X 坐标
+                touchStartX.value = e.changedTouches[0].screenX;
+            };
+
+            const touchEnd = (e) => {
+                // 记录手指离开的 X 坐标
+                touchEndX.value = e.changedTouches[0].screenX;
+                handleSwipe();
+            };
+
+            const handleSwipe = () => {
+                // 设置最小滑动距离为 40px，避免误触
+                const minSwipeDistance = 40;
+                
+                // 向左滑 (手指从右往左移，数值变小) -> 下个月
+                if (touchEndX.value < touchStartX.value - minSwipeDistance) {
+                    changeMonth(1);
+                }
+                // 向右滑 (手指从左往右移，数值变大) -> 上个月
+                if (touchEndX.value > touchStartX.value + minSwipeDistance) {
+                    changeMonth(-1);
+                }
+            };
             const jumpToToday = () => { const t = new Date(); currentYear.value = t.getFullYear(); currentMonth.value = t.getMonth(); selectedDate.value = t; };
             const selectDate = (day) => selectedDate.value = day.date;
             const isSameDate = (d1, d2) => d1.getDate()===d2.getDate() && d1.getMonth()===d2.getMonth() && d1.getFullYear()===d2.getFullYear();
@@ -1051,6 +1083,7 @@
             return {
                 isDark, toggleTheme, // 新增
                 currentTab, showCalendar, toggleCalendar: () => showCalendar.value = !showCalendar.value,
+                touchStart, touchEnd,
                 isFocusing, newTask, newDuration, 
                 activeQuadrantTasks, inboxTasks, 
                 homeUpcomingList,  upcomingList, expiredList,
