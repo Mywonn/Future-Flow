@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Future Flow Pro v2.1</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.min.js"></script>
+    <style>
+        [v-cloak] { display: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        /* 四象限网格样式 */
+        .quadrant-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; gap: 1px; background: #e5e7eb; }
+        .q-cell { background: white; padding: 8px; overflow-y: auto; display: flex; flex-direction: column; }
+        /* 进度条动画 */
+        .progress-bar { transition: width 0.5s ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 h-screen w-screen overflow-hidden flex flex-col font-sans">
+
+<div id="app" class="max-w-md mx-auto w-full h-full flex flex-col bg-white shadow-2xl relative" v-cloak>
+
+    <div v-if="isFocusing" class="absolute inset-0 z-50 bg-blue-600 text-white flex flex-col items-center justify-center space-y-8 animate-fade-in">
+        <div class="text-6xl font-mono font-bold">{{ formatTime(timeLeft) }}</div>
+        <div class="text-xl opacity-90 px-8 text-center">{{ currentFocusTask ? currentFocusTask.text : '专注模式' }}</div>
+        <div class="flex flex-col space-y-4">
+            <button @click="stopTimer(true)" class="bg-white text-blue-600 font-bold px-8 py-3 rounded-full hover:bg-gray-100 transition shadow-lg">完成并记录</button>
+            <button @click="stopTimer(false)" class="text-white/70 text-sm hover:text-white underline">放弃</button>
+        </div>
+    </div>
+
+    <div v-else class="relative bg-blue-600 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300">
+        <div class="px-4 py-3">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                     <h1 class="text-lg font-bold tracking-tight">Future Flow <span class="text-xs font-normal opacity-70">Sync</span></h1>
+                     <button @click="showSyncModal = true" class="text-white/80 hover:text-white transition p-1">
+                        <span v-if="syncStatus === 'success'" class="text-green-300">☁️√</span>
+                        <span v-else-if="syncStatus === 'loading'" class="animate-pulse">☁️...</span>
+                        <span v-else>☁️</span>
+                     </button>
+                </div>
+               
+                <div class="flex space-x-2">
+                    <button v-if="showCalendar" @click="jumpToToday" class="text-xs bg-blue-500 border border-blue-400 hover:bg-blue-400 px-2 py-1.5 rounded transition shadow-sm font-medium">
+                        今
+                    </button>
+                    <button @click="toggleCalendar" class="text-xs bg-blue-700/50 hover:bg-blue-700 px-3 py-1.5 rounded transition">
+                        {{ showCalendar ? '收起' : '日历' }}
+                    </button>
+                </div>
+            </div>
+            
+            <div v-if="currentTab === 'now'" class="flex items-end justify-between mt-4">
+                 <div class="flex items-baseline space-x-1 cursor-pointer hover:opacity-80 transition" @click="toggleTimerMode">
+                    <span class="text-4xl font-mono font-bold">{{ defaultDuration }}</span>
+                    <span class="text-xs opacity-70 mb-1">分/番茄 ▼</span>
+                 </div>
+                <div class="text-right">
+                    <div class="text-2xl font-bold">{{ todayPomodoros }}</div>
+                    <div class="text-xs opacity-70">今日成就</div>
+                </div>
+            </div>
+        </div>
+        <div v-if="showCalendar" 
+            class="bg-white text-gray-800 border-b border-gray-200 p-2 animate-fade-in transition-all"
+            :class="['now', 'quadrant'].includes(currentTab) ? 'absolute top-full left-0 w-full shadow-2xl z-50 rounded-b-xl' : 'shadow-inner relative'">
+            
+            <div class="flex justify-between items-center mb-2 px-2">
+                <button @click="changeMonth(-1)" class="p-1 text-gray-400 hover:text-blue-600">◀</button>
+                <div class="text-center leading-tight">
+                    <div class="font-bold">{{ currentYear }}年 {{ currentMonth + 1 }}月</div>
+                    <div class="text-[10px] text-gray-500">{{ lunarMonthStr }}</div>
+                </div>
+                <button @click="changeMonth(1)" class="p-1 text-gray-400 hover:text-blue-600">▶</button>
+            </div>
+            <div class="grid grid-cols-7 text-center text-[10px] text-gray-400 mb-1">
+                <span v-for="w in ['日','一','二','三','四','五','六']">{{ w }}</span>
+            </div>
+            <div class="grid grid-cols-7 gap-y-1 text-center text-sm">
+                <div v-for="n in firstDayOfWeek"></div>
+                    <div v-for="day in daysInMonth" @click="selectDate(day)" class="h-10 flex flex-col items-center justify-center rounded-lg cursor-pointer relative transition-colors" :class="getDayClass(day)">
+                    <span class="font-medium leading-none">{{ day.dayNum }}</span>
+                    <span class="text-[9px]  mt-0.5 truncate w-full text-center" :class="getLunarClass(day)">{{ day.lunarText }}</span>
+                    
+                    <div class="flex space-x-0.5 mt-0.5">
+                        <div v-if="hasTask(day.date)" class="w-1 h-1 bg-blue-500 rounded-full"></div>
+                    </div>
+                </div>   
+            </div>
+        </div>
+        
+    </div>
+
+    <div class="flex-1 overflow-hidden relative bg-white flex flex-col">
+        
+        <div v-if="currentTab === 'now'" class="h-full flex flex-col">
+            
+            <div class="p-3 bg-white z-30 shrink-0 border-b border-gray-50">
+                <div class="flex items-center bg-gray-50 rounded-xl p-1.5 border border-gray-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                    <input v-model="newTask" @keyup.enter="addTask" type="text" placeholder="添加待办..." class="bg-transparent flex-1 px-3 outline-none text-sm min-w-0">
+                    <input v-model="newDuration" type="number" min="0" placeholder="计划h" class="w-14 bg-white text-xs p-1.5 rounded-lg outline-none text-center mr-2 text-gray-500 border border-gray-100 shadow-sm">
+                    <button @click="addTask" class="bg-blue-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md hover:bg-blue-700 active:scale-95 transition">＋</button>
+                </div>
+            </div>
+            
+            <div v-if="activeQuadrantTasks.length > 0" class="flex flex-col shrink-0 max-h-[35%] border-b border-gray-100">
+                <div class="bg-white py-2 px-4 flex items-center shrink-0 z-10 sticky top-0">
+                    <div class="h-3 w-1 bg-orange-400 rounded-full mr-2"></div>
+                    <span class="text-xs font-bold text-gray-500">来自四象限</span>
+                </div>
+                <div class="overflow-y-auto px-3 pb-2 space-y-2">
+                    <div v-for="task in activeQuadrantTasks" :key="task.id" 
+                         class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center group">
+                        <button @click="toggleTask(task)" class="mr-3 text-gray-300 hover:text-blue-500">
+                            <div class="w-5 h-5 border-2 border-current rounded-full"></div>
+                        </button>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center">
+                                <span class="font-medium truncate text-sm text-gray-700">{{ task.text }}</span>
+                                <span class="ml-2 text-[10px] px-1 rounded border bg-gray-50 text-gray-400">Q{{task.q}}</span>
+                            </div>
+                            <div v-if="task.duration > 0" class="mt-1.5 h-1 w-full bg-red-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-500 rounded-full transition-all" :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }"></div>
+                            </div>
+                        </div>
+                        <button @click="startTimer(task)" class="ml-2 text-gray-300 hover:text-blue-600 p-1">▶</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="bg-white py-2 px-4 flex items-center shrink-0 z-10 sticky top-0">
+                    <div class="h-3 w-1 bg-blue-500 rounded-full mr-2"></div>
+                    <span class="text-xs font-bold text-gray-500">今日日程 / 临时待办</span>
+                </div>
+                <div class="flex-1 overflow-y-auto px-3 pb-2 space-y-2">
+                    <div v-for="task in inboxTasks" :key="task.id" 
+                        class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center group relative overflow-hidden transition-all duration-300"
+                        :class="{'opacity-50 bg-gray-50': task.done}"> <button @click="toggleTask(task)" class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 transition-colors">
+                            <div v-if="task.done" class="text-blue-500 text-lg">☑</div>
+                            <div v-else class="w-5 h-5 border-2 border-current rounded-full"></div>
+                        </button>
+
+                        <div class="flex-1 min-w-0 cursor-pointer" @click="openEditModal(task)">
+                            <span :class="{'line-through text-gray-400': task.done}" 
+                                class="font-medium text-sm text-gray-700 truncate block">
+                                {{ task.text }}
+                            </span>
+                            <div v-if="task.duration > 0" class="mt-1 h-1 w-24 bg-red-100 rounded-full overflow-hidden">
+                                    <div class="h-full bg-blue-500 rounded-full" :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }"></div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-1 ml-2">
+                            <button v-if="!task.done" @click="startTimer(task)" class="text-gray-300 hover:text-blue-600 px-2 p-1">▶</button>
+                            
+                            <button @click="deleteTask(task.id)" class="text-gray-300 hover:text-red-400 px-1 text-lg">×</button>
+                        </div>
+                    </div>
+                    <div v-if="inboxTasks.length === 0" class="text-center py-6 opacity-30 mt-4">
+                        <p class="text-xs">暂无临时任务</p>
+                    </div>
+                </div>
+            </div>
+
+           <div v-if="pinnedCountdowns.length > 0" class="shrink-0 p-3 pt-0 bg-gradient-to-t from-gray-50 to-transparent">
+                <div class="flex items-center mb-2 pl-2 border-l-4 border-pink-400">
+                    <span class="text-xs font-bold text-gray-500">重要倒数</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div v-for="day in pinnedCountdowns.slice(0, 2)" :key="day.id" 
+                        class="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-24 relative overflow-hidden">
+                        <div class="absolute -right-2 -bottom-2 text-6xl opacity-5 select-none pointer-events-none">⏳</div>
+                        
+                        <div class="text-xs text-gray-500 font-medium truncate z-10">{{ day.name }}</div>
+                        <div class="z-10 mt-1">
+                            <span class="text-3xl font-bold tracking-tight" :class="getDaysUntil(day.date) >= 0 ? 'text-blue-600' : 'text-gray-400'">
+                                {{ Math.abs(getDaysUntil(day.date)) }}
+                            </span>
+                            <span class="text-[10px] text-gray-400 ml-1">{{ getDaysUntil(day.date) >= 0 ? '天后' : '天前' }}</span>
+                        </div>
+                        <div class="text-[9px] text-gray-300 z-10">{{ day.date }}</div>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+        <div v-if="currentTab === 'quadrant'" class="h-full quadrant-grid text-sm bg-gray-50">
+             <div v-for="q in [1,2,3,4]" :key="q" class="q-cell relative group"
+                 :class="{'border-b border-r border-red-100': q===1, 'border-b border-blue-100': q===2, 'border-r border-yellow-100': q===3, 'border-gray-100': q===4}">
+                <div class="text-xs font-bold mb-2 sticky top-0 bg-white/95 p-1 z-10 flex justify-between text-gray-500">
+                    <span :class="{'text-red-500': q===1, 'text-blue-500': q===2, 'text-yellow-600': q===3}">{{ quadrantTitles[q-1] }}</span>
+                    <button @click="addQuickTask(q)" class="text-lg leading-none hover:text-blue-600 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 transition">+</button>
+                </div>
+                <div v-for="t in getTasksByQ(q)" class="flex items-start mb-2 hover:bg-gray-50 p-1 rounded group/item transition-colors">
+                    <input type="checkbox" :checked="t.done" @click.stop="toggleTask(t)" class="mt-1 mr-2 shrink-0 accent-blue-500 cursor-pointer">
+                    <div class="min-w-0 w-full cursor-pointer" @click="openEditModal(t)">
+                        <div :class="{'line-through text-gray-400': t.done}" class="break-all leading-tight">{{ t.text }}</div>
+                        <div v-if="t.duration" class="mt-1 h-1 bg-red-50 rounded w-full overflow-hidden">
+                            <div class="h-full bg-blue-400" :style="{width: Math.min((t.accumulated||0)/t.duration*100, 100) + '%'}"></div>
+                        </div>
+                    </div>
+                </div>
+                <div @click="addQuickTask(q)" class="mt-auto h-8 flex items-center justify-center text-gray-200 hover:text-gray-400 cursor-pointer text-xs">+ 添加任务</div>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'progress'" class="h-full p-4 overflow-y-auto bg-gray-50 space-y-4">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-500 p-5 rounded-2xl shadow-lg text-white">
+                <div class="flex justify-between items-end mb-2">
+                    <div class="opacity-80 text-sm">总完成工时</div>
+                    <div class="text-3xl font-bold font-mono">{{ progressStats.done }} <span class="text-sm font-normal">h</span></div>
+                </div>
+                <div class="w-full bg-black/20 rounded-full h-2 overflow-hidden">
+                    <div class="bg-white/90 h-2 rounded-full progress-bar" :style="{width: progressStats.percent + '%'}"></div>
+                </div>
+            </div>
+            <div v-for="task in progressTasks" :key="task.id" class="bg-white rounded-xl shadow-sm border border-gray-100 mb-3 overflow-hidden">
+                <div @click="task.expanded = !task.expanded" class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition">
+                    <div class="flex-1">
+                         <div class="font-medium text-gray-800 flex items-center text-sm">
+                            <span :class="{'opacity-50 line-through': task.done}">{{ task.text }}</span>
+                            <span class="ml-2 text-[10px] text-gray-400 border px-1 rounded">Q{{ task.q }}</span>
+                        </div>
+                        <div class="mt-2 h-1.5 w-32 bg-red-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-blue-500 rounded-full" :style="{width: Math.min((task.accumulated||0)/task.duration*100, 100) + '%'}"></div>
+                        </div>
+                    </div>
+                    <div class="text-right pl-4">
+                        <div class="text-xs font-bold font-mono text-gray-700">
+                            {{ (task.accumulated || 0).toFixed(1) }} <span class="text-gray-400 font-normal">/ {{ task.duration }}h</span>
+                        </div>
+                    </div>
+                </div>
+                <div v-if="task.expanded" class="bg-gray-50 border-t border-gray-100 p-3 text-xs">
+                     <div v-if="!task.log || task.log.length === 0" class="text-center text-gray-400 py-2">暂无记录</div>
+                     <div v-else v-for="(log, idx) in task.log" :key="idx" class="flex justify-between bg-white p-2 mb-1 rounded border border-gray-100">
+                        <span class="text-gray-500">{{ log.date }}</span>
+                        <span class="font-bold text-blue-600">+{{ log.duration.toFixed(2) }}h</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'countdown'" class="h-full p-4 overflow-y-auto bg-gray-50">
+            <h2 class="text-lg font-bold mb-4 flex justify-between items-center px-1">
+                <span>重要时刻</span>
+                <span class="text-xs font-normal text-gray-400">长按卡片可置顶</span>
+            </h2>
+            <div class="pb-20">
+                <div v-if="pinnedCountdowns.length > 0" class="mb-6">
+                    <div class="flex items-center mb-2 px-1">
+                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">已置顶</span>
+                        <div class="flex-1 h-px bg-blue-100 ml-2"></div>
+                    </div>
+                    <div class="space-y-3">
+                        <div v-for="day in pinnedCountdowns" :key="day.id" 
+                             @touchstart="startPress(day.id)" @touchend="cancelPress" @mousedown="startPress(day.id)" @mouseup="cancelPress" @mouseleave="cancelPress"
+                             class="bg-white rounded-xl shadow-md flex items-stretch border-l-4 overflow-hidden relative select-none transition-transform active:scale-[0.98]" 
+                             :class="day.color || 'border-blue-500'">
+                            <div class="flex-1 flex flex-col justify-center p-3 pl-4">
+                                <div class="font-bold text-gray-800">{{ day.name }}</div>
+                                <div class="text-xs text-gray-400 mt-1">{{ day.date }}</div>
+                            </div>
+                            <div class="flex flex-col justify-center items-end p-3 shrink-0 mr-1">
+                                <div class="text-2xl font-bold leading-none" :class="getDaysUntil(day.date) >= 0 ? 'text-blue-600' : 'text-gray-400'">{{ Math.abs(getDaysUntil(day.date)) }}</div>
+                                <div class="text-[10px] text-gray-400 mt-1">{{ getDaysUntil(day.date) >= 0 ? '天后' : '天前' }}</div>
+                            </div>
+                            <div class="flex font-medium text-sm shrink-0">
+                                <button @click.stop="editCountdown(day)" class="bg-gray-50 text-blue-500 w-12 flex items-center justify-center border-l border-gray-100">改</button>
+                                <button @click.stop="deleteCountdown(day.id)" class="bg-gray-50 text-red-500 w-12 flex items-center justify-center border-l border-gray-100">删</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                     <div class="flex items-center mb-2 px-1">
+                        <span class="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">全部倒数</span>
+                        <div class="flex-1 h-px bg-gray-200 ml-2"></div>
+                    </div>
+                    <div class="space-y-3">
+                        <div v-for="day in unpinnedCountdowns" :key="day.id" 
+                             @touchstart="startPress(day.id)" @touchend="cancelPress" @mousedown="startPress(day.id)" @mouseup="cancelPress" @mouseleave="cancelPress"
+                             class="bg-white rounded-xl shadow-sm flex items-stretch border-l-4 overflow-hidden relative select-none transition-transform active:scale-[0.98]" 
+                             :class="day.color || 'border-gray-400'">
+                            <div class="flex-1 flex flex-col justify-center p-3 pl-4">
+                                <div class="font-bold text-gray-800">{{ day.name }}</div>
+                                <div class="text-xs text-gray-400 mt-1">{{ day.date }}</div>
+                            </div>
+                            <div class="flex flex-col justify-center items-end p-3 shrink-0 mr-1">
+                                <div class="text-2xl font-bold leading-none" :class="getDaysUntil(day.date) >= 0 ? 'text-blue-600' : 'text-gray-400'">{{ Math.abs(getDaysUntil(day.date)) }}</div>
+                                <div class="text-[10px] text-gray-400 mt-1">{{ getDaysUntil(day.date) >= 0 ? '天后' : '天前' }}</div>
+                            </div>
+                            <div class="flex font-medium text-sm shrink-0">
+                                <button @click.stop="editCountdown(day)" class="bg-gray-50 text-blue-500 w-12 flex items-center justify-center border-l border-gray-100">改</button>
+                                <button @click.stop="deleteCountdown(day.id)" class="bg-gray-50 text-red-500 w-12 flex items-center justify-center border-l border-gray-100">删</button>
+                            </div>
+                        </div>
+                        <button @click="addCountdown" class="w-full py-4 border-2 border-dashed border-gray-300 text-gray-400 rounded-xl hover:bg-white hover:border-blue-300 hover:text-blue-500 transition flex flex-col items-center">
+                            <span>+ 添加倒数日</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white border-t border-gray-200 flex justify-around items-center p-1 pb-safe z-30 text-[10px] select-none">
+        <button @click="currentTab = 'now'" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'now' ? 'text-blue-600 scale-105 font-bold' : 'text-gray-400'">
+            <span class="text-xl mb-1">⚡</span><span>专注</span>
+        </button>
+        <button @click="currentTab = 'quadrant'" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'quadrant' ? 'text-blue-600 scale-105 font-bold' : 'text-gray-400'">
+            <span class="text-xl mb-1">📅</span><span>四象限</span>
+        </button>
+        <button @click="currentTab = 'progress'" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'progress' ? 'text-blue-600 scale-105 font-bold' : 'text-gray-400'">
+            <span class="text-xl mb-1">📊</span><span>进度</span>
+        </button>
+        <button @click="currentTab = 'countdown'" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'countdown' ? 'text-blue-600 scale-105 font-bold' : 'text-gray-400'">
+            <span class="text-xl mb-1">⏳</span><span>倒数日</span>
+        </button>
+    </div>
+
+    <div v-if="editingTask" class="absolute inset-0 z-50 flex items-end justify-center bg-black/50 animate-fade-in" @click.self="closeEditModal">
+        <div class="bg-white w-full max-w-md rounded-t-2xl p-4 pb-8 space-y-2 animate-slide-up shadow-2xl">
+            <div class="text-center text-gray-400 text-xs mb-2">编辑任务</div>
+            <button @click="editTaskText" class="w-full py-3 bg-gray-50 rounded-xl text-blue-600 font-medium active:bg-gray-100">修改内容</button>
+            <button @click="editTaskDuration" class="w-full py-3 bg-gray-50 rounded-xl text-blue-600 font-medium active:bg-gray-100">修改预估工时</button>
+            <button @click="deleteCurrentTask" class="w-full py-3 bg-gray-50 rounded-xl text-red-500 font-medium active:bg-gray-100">删除任务</button>
+            <div class="h-2"></div>
+            <button @click="closeEditModal" class="w-full py-3 bg-gray-100 rounded-xl text-gray-500 font-bold active:bg-gray-200">取消</button>
+        </div>
+    </div>
+
+    <div v-if="showSyncModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in" @click.self="showSyncModal = false">
+        <div class="bg-white w-11/12 max-w-md rounded-2xl p-6 shadow-2xl animate-scale-up">
+            <h3 class="text-lg font-bold mb-2 flex items-center">
+                <span class="mr-2">☁️</span> GitHub 云同步
+            </h3>
+            <p class="text-xs text-gray-500 mb-4">使用 GitHub Gist 实现多设备免费数据同步。</p>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-bold text-gray-600 block mb-1">GitHub Token (必填)</label>
+                    <input v-model="githubToken" type="password" placeholder="粘贴 ghp_ 开头的 Token" class="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div>
+                    <label class="text-xs font-bold text-gray-600 block mb-1">Gist ID (选填, 初次留空)</label>
+                    <input v-model="gistId" type="text" placeholder="初次使用会自动生成" class="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:border-blue-500 outline-none transition">
+                </div>
+                
+                <div class="flex space-x-2 pt-2">
+                    <button @click="handleSync('upload')" class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition">
+                        ↑ 上传本地数据
+                    </button>
+                    <button @click="handleSync('download')" class="flex-1 bg-gray-100 text-blue-600 py-2 rounded-lg text-sm font-bold border border-blue-100 hover:bg-blue-50 active:scale-95 transition">
+                        ↓ 下载云端数据
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-4 text-[10px] text-gray-400 border-t pt-2">
+                <p>1. 去 github.com/settings/tokens 生成 Token (勾选 gist 权限)</p>
+                <p>2. 粘贴 Token，点击“上传”，Gist ID 会自动填入</p>
+                <p>3. 在其他手机填入 Token 和 ID，点击“下载”即可同步</p>
+            </div>
+            
+            <button @click="showSyncModal = false" class="absolute top-4 right-4 text-gray-300 hover:text-gray-500">×</button>
+        </div>
+    </div>
+
+</div>
+<script>
+    const { createApp, ref, computed, watch, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- 状态定义 ---
+            const currentTab = ref('now');
+            const showCalendar = ref(false);
+            const newTask = ref('');
+            const newDuration = ref(''); 
+            
+            // 数据
+            const tasks = ref([]);
+            const countdowns = ref([
+                { id: 1, name: '比特币减半预期', date: '2028-04-18', color: 'border-orange-500', pinned: true },
+                { id: 2, name: '春节', date: '2026-02-17', color: 'border-red-500', pinned: false },
+            ]);
+
+            const isFocusing = ref(false);
+            const defaultDuration = ref(25);
+            const timeLeft = ref(25 * 60);
+            const currentFocusTask = ref(null);
+            const todayPomodoros = ref(0);
+            let timerInterval = null;
+            
+            const editingTask = ref(null);
+            const showSyncModal = ref(false); // 同步弹窗
+            const githubToken = ref('');
+            const gistId = ref('');
+            const syncStatus = ref('idle'); // idle, loading, success, error
+
+            const now = new Date();
+            const currentYear = ref(now.getFullYear());
+            const currentMonth = ref(now.getMonth());
+            const selectedDate = ref(new Date());
+
+            const quadrantTitles = ['重要紧急 🔥', '重要不紧急 📅', '不重要紧急 🔔', '不重要不紧急 🗑️'];
+
+            // --- 监听Tab ---
+            watch(currentTab, (newTab) => {
+                if (newTab === 'now' || newTab === 'quadrant') {
+                    showCalendar.value = false;
+                } else {
+                    showCalendar.value = true;
+                }
+            });
+
+            // --- 持久化 & 初始化 ---
+            onMounted(() => {
+                const savedTasks = localStorage.getItem('mike-pro-tasks-v4');
+                if (savedTasks) tasks.value = JSON.parse(savedTasks);
+                
+                const savedCountdowns = localStorage.getItem('mike-pro-countdowns-v4');
+                if (savedCountdowns) countdowns.value = JSON.parse(savedCountdowns);
+
+                const savedPoms = localStorage.getItem('mike-pro-poms-v4');
+                todayPomodoros.value = savedPoms ? parseInt(savedPoms) : 0;
+
+                // 读取同步设置
+                const savedToken = localStorage.getItem('mike_github_token');
+                if(savedToken) githubToken.value = savedToken;
+                const savedGistId = localStorage.getItem('mike_gist_id');
+                if(savedGistId) gistId.value = savedGistId;
+            });
+
+            // 自动保存本地数据
+            watch([tasks, countdowns, todayPomodoros], () => {
+                localStorage.setItem('mike-pro-tasks-v4', JSON.stringify(tasks.value));
+                localStorage.setItem('mike-pro-countdowns-v4', JSON.stringify(countdowns.value));
+                localStorage.setItem('mike-pro-poms-v4', todayPomodoros.value);
+            }, { deep: true });
+
+            // 自动保存同步配置
+            watch([githubToken, gistId], () => {
+                localStorage.setItem('mike_github_token', githubToken.value);
+                localStorage.setItem('mike_gist_id', gistId.value);
+            });
+
+            // --- 云同步逻辑 (Gist) ---
+            const handleSync = async (direction) => {
+                if (!githubToken.value) {
+                    alert("请先填写 GitHub Token");
+                    return;
+                }
+                syncStatus.value = 'loading';
+                
+                const fileName = 'mikes_flow_data.json';
+                const content = JSON.stringify({
+                    tasks: tasks.value,
+                    countdowns: countdowns.value,
+                    todayPomodoros: todayPomodoros.value,
+                    updatedAt: new Date().toISOString()
+                });
+
+                try {
+                    // 1. UPLOAD (创建或更新)
+                    if (direction === 'upload') {
+                        let url = 'https://api.github.com/gists';
+                        let method = 'POST';
+                        
+                        // 如果有ID，则是更新 (PATCH)
+                        if (gistId.value) {
+                            url += `/${gistId.value}`;
+                            method = 'PATCH';
+                        }
+
+                        const res = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'Authorization': `token ${githubToken.value}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                description: "Mike's Flow Data Sync",
+                                public: false,
+                                files: {
+                                    [fileName]: { content: content }
+                                }
+                            })
+                        });
+
+                        if (!res.ok) throw new Error('上传失败，请检查Token权限');
+                        const data = await res.json();
+                        
+                        // 保存生成的 Gist ID
+                        if (!gistId.value) gistId.value = data.id;
+                        alert('✅ 上传成功！数据已同步到云端。');
+                    } 
+                    // 2. DOWNLOAD (获取)
+                    else {
+                        if (!gistId.value) {
+                            alert("请先提供 Gist ID (或者在另一台设备先上传)");
+                            syncStatus.value = 'error';
+                            return;
+                        }
+                        const res = await fetch(`https://api.github.com/gists/${gistId.value}`, {
+                            headers: { 'Authorization': `token ${githubToken.value}` }
+                        });
+                        
+                        if (!res.ok) throw new Error('下载失败，ID可能错误');
+                        const data = await res.json();
+                        const file = data.files[fileName];
+                        
+                        if (file && file.content) {
+                            const cloudData = JSON.parse(file.content);
+                            if(confirm(`云端数据更新于: ${cloudData.updatedAt}\n确定覆盖本地数据吗？`)) {
+                                tasks.value = cloudData.tasks || [];
+                                countdowns.value = cloudData.countdowns || [];
+                                todayPomodoros.value = cloudData.todayPomodoros || 0;
+                                alert('✅ 下载成功！本地数据已更新。');
+                            }
+                        }
+                    }
+                    syncStatus.value = 'success';
+                    setTimeout(() => syncStatus.value = 'idle', 3000);
+
+                } catch (e) {
+                    console.error(e);
+                    alert(`同步出错: ${e.message}`);
+                    syncStatus.value = 'error';
+                }
+            };
+
+            // --- 任务管理 ---
+            const formatDateKey = (date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+            
+            const addTask = () => {
+                if (!newTask.value.trim()) return;
+                let duration = 0;
+                if (newDuration.value) {
+                    duration = Math.abs(parseFloat(newDuration.value));
+                }
+                tasks.value.unshift({
+                    id: Date.now(), text: newTask.value, done: false,
+                    date: formatDateKey(selectedDate.value),
+                    q: 0, duration: duration, accumulated: 0, log: [], expanded: false
+                });
+                newTask.value = ''; newDuration.value = '';
+            };
+
+            const addQuickTask = (quadrant) => {
+                const text = prompt(`添加任务到 [${quadrantTitles[quadrant-1]}]:`);
+                if (text) {
+                    let durationStr = prompt("计划工时(小时)?", "");
+                    let duration = (durationStr && !isNaN(durationStr)) ? Math.abs(parseFloat(durationStr)) : 0;
+                    tasks.value.push({
+                        id: Date.now(), text: text, done: false,
+                        date: formatDateKey(selectedDate.value),
+                        q: quadrant, duration: duration, accumulated: 0, log: [], expanded: false
+                    });
+                }
+            };
+
+            const toggleTask = (task) => task.done = !task.done;
+            const deleteTask = (id) => tasks.value = tasks.value.filter(t => t.id !== id);
+
+            // --- 编辑逻辑 ---
+            const openEditModal = (task) => editingTask.value = task;
+            const closeEditModal = () => editingTask.value = null;
+            const editTaskText = () => {
+                if(!editingTask.value) return;
+                const newText = prompt("修改任务内容:", editingTask.value.text);
+                if(newText) editingTask.value.text = newText;
+                closeEditModal();
+            };
+            const editTaskDuration = () => {
+                if(!editingTask.value) return;
+                const newD = prompt("修改预估工时 (小时):", editingTask.value.duration);
+                if(newD !== null && !isNaN(newD)) editingTask.value.duration = Math.abs(parseFloat(newD));
+                closeEditModal();
+            };
+            const deleteCurrentTask = () => {
+                if(!editingTask.value) return;
+                if(confirm("确定要删除这个任务吗？")) deleteTask(editingTask.value.id);
+                closeEditModal();
+            };
+
+            // --- 核心分类 ---
+            const activeQuadrantTasks = computed(() => tasks.value.filter(t => t.q > 0 && !t.done).sort((a, b) => a.q - b.q));
+            const inboxTasks = computed(() => {
+                const key = formatDateKey(selectedDate.value);
+                return tasks.value.filter(t => t.q === 0 && t.date === key).sort((a,b) => a.done - b.done);
+            });
+            const pinnedCountdowns = computed(() => countdowns.value.filter(c => c.pinned).sort((a,b) => getDaysUntil(a.date) - getDaysUntil(b.date)));
+            const unpinnedCountdowns = computed(() => countdowns.value.filter(c => !c.pinned).sort((a,b) => getDaysUntil(a.date) - getDaysUntil(b.date)));
+            const progressTasks = computed(() => tasks.value.filter(t => t.duration > 0));
+            const progressStats = computed(() => {
+                const list = progressTasks.value;
+                if (list.length === 0) return { total: 0, done: 0, percent: 0 };
+                const total = list.reduce((sum, t) => sum + t.duration, 0);
+                const done = list.reduce((sum, t) => sum + (t.accumulated || 0), 0);
+                return { total: parseFloat(total.toFixed(1)), done: parseFloat(done.toFixed(1)), percent: Math.min(Math.round((done / total) * 100) || 0, 100) };
+            });
+
+            // --- 其他 Helpers ---
+            let pressTimer = null;
+            const startPress = (id) => { pressTimer = setTimeout(() => togglePin(id), 600); };
+            const cancelPress = () => clearTimeout(pressTimer);
+            const togglePin = (id) => {
+                const item = countdowns.value.find(c => c.id === id);
+                if (item) { item.pinned = !item.pinned; if(navigator.vibrate) navigator.vibrate(50); }
+            };
+
+            const toggleTimerMode = () => {
+                const modes = [25, 45, 60, 15];
+                defaultDuration.value = modes[(modes.indexOf(defaultDuration.value) + 1) % modes.length];
+                timeLeft.value = defaultDuration.value * 60;
+            };
+            const startTimer = (task) => {
+                currentFocusTask.value = task; isFocusing.value = true; timeLeft.value = defaultDuration.value * 60;
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    timeLeft.value--;
+                    if (timeLeft.value <= 0) { stopTimer(true); alert("专注完成！"); }
+                }, 1000);
+            };
+            const stopTimer = (save) => {
+                clearInterval(timerInterval); isFocusing.value = false;
+                if (save && currentFocusTask.value) {
+                    todayPomodoros.value++;
+                    const added = defaultDuration.value / 60;
+                    const t = currentFocusTask.value;
+                    if(!t.accumulated) t.accumulated = 0; t.accumulated += added;
+                    if(!t.log) t.log = []; t.log.unshift({ date: new Date().toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}), duration: added });
+                }
+                currentFocusTask.value = null;
+            };
+            const formatTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+
+            const daysInMonth = computed(() => {
+                const days = []; const year = currentYear.value; const month = currentMonth.value;
+                const lastDay = new Date(year, month + 1, 0).getDate();
+                for (let i = 1; i <= lastDay; i++) {
+                    const date = new Date(year, month, i);
+                    const lunar = Lunar.fromDate(date);
+                    let text = lunar.getDayInChinese();
+                    if(lunar.getFestivals().length) text = lunar.getFestivals()[0];
+                    else if(lunar.getJieQi()) text = lunar.getJieQi();
+                    else if(lunar.getDay()===1) text = lunar.getMonthInChinese()+'月';
+                    days.push({ dayNum: i, date: date, lunarText: text });
+                }
+                return days;
+            });
+            const firstDayOfWeek = computed(() => new Date(currentYear.value, currentMonth.value, 1).getDay());
+            const lunarMonthStr = computed(() => Lunar.fromDate(new Date(currentYear.value, currentMonth.value, 15)).getMonthInChinese() + "月");
+            const changeMonth = (d) => { const newDate = new Date(currentYear.value, currentMonth.value + d, 1); currentYear.value = newDate.getFullYear(); currentMonth.value = newDate.getMonth(); };
+            const jumpToToday = () => { const t = new Date(); currentYear.value = t.getFullYear(); currentMonth.value = t.getMonth(); selectedDate.value = t; };
+            const selectDate = (day) => selectedDate.value = day.date;
+            const isSameDate = (d1, d2) => d1.getDate()===d2.getDate() && d1.getMonth()===d2.getMonth() && d1.getFullYear()===d2.getFullYear();
+            const getDayClass = (day) => {
+                if (isSameDate(day.date, selectedDate.value)) return 'bg-blue-600 text-white shadow-md ring-2 ring-blue-200';
+                if (isSameDate(day.date, new Date())) return 'text-blue-600 font-bold bg-blue-50';
+                return 'hover:bg-gray-100 text-gray-600';
+            };
+            const getLunarClass = (day) => {
+                // 1. 选中状态：直接用纯白色，最高亮度
+                if (isSameDate(day.date, selectedDate.value)) return 'text-white';
+
+                // 2. 节日与节气：保持红色，且去掉透明度限制
+                // 建议把“立春、雨水”等二十四节气也加入高亮列表
+                const highlightList = ['春节', '端午', '中秋', '元旦', '清明', '国庆', '立春', '雨水', '惊蛰', '春分'];
+                if (highlightList.some(f => day.lunarText.includes(f))) return 'text-red-500 font-bold';
+
+                // 3. 普通农历：从 gray-400 加深到 gray-600，看得更清楚
+                return 'text-gray-600';
+            };
+            const hasTask = (date) => { const key = formatDateKey(date); return tasks.value.some(t => t.date === key && !t.done); };
+            const getDaysUntil = (dateStr) => { const t = new Date(dateStr); const now = new Date(); t.setHours(0,0,0,0); now.setHours(0,0,0,0); return Math.ceil((t - now) / (1000 * 60 * 60 * 24)); };
+            const addCountdown = () => { const n = prompt("事件:"); if(!n) return; const d = prompt("日期(YYYY-MM-DD):"); if(n&&d) countdowns.value.push({ id: Date.now(), name: n, date: d, color: 'border-blue-500', pinned: false }); };
+            const deleteCountdown = (id) => { if(confirm('删除?')) countdowns.value = countdowns.value.filter(c => c.id !== id); };
+            const editCountdown = (item) => { const n = prompt("名称:", item.name); const d = prompt("日期:", item.date); if(n&&d) { item.name = n; item.date = d; } };
+
+            return {
+                currentTab, showCalendar, toggleCalendar: () => showCalendar.value = !showCalendar.value,
+                isFocusing, newTask, newDuration, 
+                activeQuadrantTasks, inboxTasks, pinnedCountdowns, unpinnedCountdowns,
+                quadrantTitles, progressStats, progressTasks, 
+                currentYear, currentMonth, lunarMonthStr, daysInMonth, firstDayOfWeek,
+                selectedDate, changeMonth, jumpToToday, selectDate, getDayClass,
+                getLunarClass,
+                defaultDuration, toggleTimerMode, timeLeft, formatTime, startTimer, stopTimer,
+                todayPomodoros, addTask, toggleTask, deleteTask, addQuickTask,
+                getTasksByQ: (q) => tasks.value.filter(t => t.q === q), hasTask,
+                getDaysUntil, addCountdown, deleteCountdown, editCountdown,
+                startPress, cancelPress, currentFocusTask,
+                // Modal
+                editingTask, openEditModal, closeEditModal, editTaskText, editTaskDuration, deleteCurrentTask,
+                // Sync
+                showSyncModal, githubToken, gistId, handleSync, syncStatus
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
