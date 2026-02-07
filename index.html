@@ -12,7 +12,7 @@
 
     <link rel="apple-touch-icon" href="icon/ico.png">
 
-    <title>Future Flow Pro v2.2 Dark</title>
+    <title>Future Flow Pro</title>
     
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -39,6 +39,15 @@
         html.dark .q-cell { background: #1f2937; } /* dark:bg-gray-800 */
 
         .progress-bar { transition: width 0.5s ease-in-out; }
+
+        /* --- 新增：iOS 风格开关样式 --- */
+        .ios-switch { position: relative; display: inline-block; width: 50px; height: 30px; }
+        .ios-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e5e7eb; transition: .4s; border-radius: 34px; }
+        html.dark .slider { background-color: #4b5563; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        input:checked + .slider { background-color: #2563eb; }
+        input:checked + .slider:before { transform: translateX(20px); }
 
         #app {
             padding-top: env(safe-area-inset-top);
@@ -77,10 +86,10 @@
                 </div>
                
                 <div class="flex space-x-2">
-                    <button v-if="showCalendar" @click="jumpToToday" class="text-xs bg-blue-500 dark:bg-gray-700 border border-blue-400 dark:border-gray-600 hover:bg-blue-400 px-2 py-1.5 rounded transition shadow-sm font-medium">
+                    <button v-if="showCalendar || ['progress', 'countdown'].includes(currentTab)" @click="jumpToToday" class="text-xs bg-blue-500 dark:bg-gray-700 border border-blue-400 dark:border-gray-600 hover:bg-blue-400 px-2 py-1.5 rounded transition shadow-sm font-medium">
                         今
                     </button>
-                    <button @click="toggleCalendar" class="text-xs bg-blue-700/50 dark:bg-gray-700 hover:bg-blue-700 px-3 py-1.5 rounded transition">
+                    <button v-if="['now', 'quadrant'].includes(currentTab)" @click="toggleCalendar" class="text-xs bg-blue-700/50 dark:bg-gray-700 hover:bg-blue-700 px-3 py-1.5 rounded transition">
                         {{ showCalendar ? '收起' : '日历' }}
                     </button>
                 </div>
@@ -98,7 +107,7 @@
             </div>
         </div>
 
-        <div v-if="showCalendar" 
+        <div v-if="showCalendar || ['progress', 'countdown'].includes(currentTab)" 
             class="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 p-2 animate-fade-in transition-all"
             :class="['now', 'quadrant'].includes(currentTab) ? 'absolute top-full left-0 w-full shadow-2xl z-50 rounded-b-xl' : 'shadow-inner relative'">
             
@@ -202,23 +211,29 @@
                 </div>
             </div>
 
-           <div v-if="pinnedCountdowns.length > 0" class="shrink-0 p-3 pt-0 bg-gradient-to-t from-gray-50 to-transparent dark:from-gray-900">
+           <div v-if="homeUpcomingList.length > 0" class="shrink-0 p-3 pt-0 bg-gradient-to-t from-gray-50 to-transparent dark:from-gray-900 overflow-hidden">
                 <div class="flex items-center mb-2 pl-2 border-l-4 border-pink-400">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">重要倒数</span>
+                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">近期重要 (10天内)</span>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div v-for="day in pinnedCountdowns.slice(0, 2)" :key="day.id" 
-                        class="bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between h-24 relative overflow-hidden">
+                
+                <div class="flex overflow-x-auto gap-3 no-scrollbar pb-1">
+                    <div v-for="day in homeUpcomingList" :key="day.id" 
+                        class="shrink-0 w-[45%] bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between h-24 relative overflow-hidden transition-all active:scale-95">
                         <div class="absolute -right-2 -bottom-2 text-6xl opacity-5 dark:opacity-10 select-none pointer-events-none">⏳</div>
-                        
-                        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium truncate z-10">{{ day.name }}</div>
-                        <div class="z-10 mt-1">
-                            <span class="text-3xl font-bold tracking-tight" :class="getDaysUntil(day.date) >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'">
-                                {{ Math.abs(getDaysUntil(day.date)) }}
-                            </span>
-                            <span class="text-[10px] text-gray-400 ml-1">{{ getDaysUntil(day.date) >= 0 ? '天后' : '天前' }}</span>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium truncate z-10 flex justify-between">
+                            <span class="truncate pr-1">{{ day.name }}</span>
+                            <span v-if="day.isLunar" class="shrink-0 text-[9px] bg-red-100 text-red-600 px-1 rounded dark:bg-red-900 dark:text-red-200">农</span>
                         </div>
-                        <div class="text-[9px] text-gray-300 dark:text-gray-600 z-10">{{ day.date }}</div>
+                        <div class="z-10 mt-1">
+                            <span class="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
+                                {{ Math.abs(getDaysUntilData(day).days) }}
+                            </span>
+                            <span class="text-[10px] text-gray-400 ml-1">天后</span>
+                        </div>
+                        <div class="text-[9px] text-gray-300 dark:text-gray-600 z-10 flex items-center truncate">
+                             {{ day.date }}
+                             <span v-if="day.repeat && day.repeat !== 'none'" class="ml-1 opacity-70">↺</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -281,63 +296,74 @@
             </div>
         </div>
 
-        <div v-if="currentTab === 'countdown'" class="h-full p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900">
-            <h2 class="text-lg font-bold mb-4 flex justify-between items-center px-1 text-gray-800 dark:text-white">
-                <span>重要时刻</span>
-                <span class="text-xs font-normal text-gray-400">长按卡片可置顶</span>
-            </h2>
-            <div class="pb-20">
-                <div v-if="pinnedCountdowns.length > 0" class="mb-6">
-                    <div class="flex items-center mb-2 px-1">
-                        <span class="text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">已置顶</span>
-                        <div class="flex-1 h-px bg-blue-100 dark:bg-blue-900 ml-2"></div>
-                    </div>
-                    <div class="space-y-3">
-                        <div v-for="day in pinnedCountdowns" :key="day.id" 
-                             @touchstart="startPress(day.id)" @touchend="cancelPress" @mousedown="startPress(day.id)" @mouseup="cancelPress" @mouseleave="cancelPress"
-                             class="bg-white dark:bg-gray-800 rounded-xl shadow-md flex items-stretch border-l-4 overflow-hidden relative select-none transition-transform active:scale-[0.98]" 
-                             :class="day.color || 'border-blue-500'">
-                            <div class="flex-1 flex flex-col justify-center p-3 pl-4">
-                                <div class="font-bold text-gray-800 dark:text-gray-100">{{ day.name }}</div>
-                                <div class="text-xs text-gray-400 mt-1">{{ day.date }}</div>
-                            </div>
-                            <div class="flex flex-col justify-center items-end p-3 shrink-0 mr-1">
-                                <div class="text-2xl font-bold leading-none" :class="getDaysUntil(day.date) >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">{{ Math.abs(getDaysUntil(day.date)) }}</div>
-                                <div class="text-[10px] text-gray-400 mt-1">{{ getDaysUntil(day.date) >= 0 ? '天后' : '天前' }}</div>
-                            </div>
-                            <div class="flex font-medium text-sm shrink-0">
-                                <button @click.stop="editCountdown(day)" class="bg-gray-50 dark:bg-gray-700 text-blue-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">改</button>
-                                <button @click.stop="deleteCountdown(day.id)" class="bg-gray-50 dark:bg-gray-700 text-red-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">删</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <div v-if="currentTab === 'countdown'" class="h-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
+            
+            <div class="shrink-0 flex justify-between items-center px-5 py-3 bg-gray-50 dark:bg-gray-900 z-20 border-b border-gray-100 dark:border-gray-800">
                 <div>
-                     <div class="flex items-center mb-2 px-1">
-                        <span class="text-xs font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">全部倒数</span>
-                        <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
-                    </div>
-                    <div class="space-y-3">
-                        <div v-for="day in unpinnedCountdowns" :key="day.id" 
-                             @touchstart="startPress(day.id)" @touchend="cancelPress" @mousedown="startPress(day.id)" @mouseup="cancelPress" @mouseleave="cancelPress"
-                             class="bg-white dark:bg-gray-800 rounded-xl shadow-sm flex items-stretch border-l-4 overflow-hidden relative select-none transition-transform active:scale-[0.98]" 
-                             :class="day.color || 'border-gray-400'">
-                            <div class="flex-1 flex flex-col justify-center p-3 pl-4">
-                                <div class="font-bold text-gray-800 dark:text-gray-100">{{ day.name }}</div>
-                                <div class="text-xs text-gray-400 mt-1">{{ day.date }}</div>
-                            </div>
-                            <div class="flex flex-col justify-center items-end p-3 shrink-0 mr-1">
-                                <div class="text-2xl font-bold leading-none" :class="getDaysUntil(day.date) >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">{{ Math.abs(getDaysUntil(day.date)) }}</div>
-                                <div class="text-[10px] text-gray-400 mt-1">{{ getDaysUntil(day.date) >= 0 ? '天后' : '天前' }}</div>
-                            </div>
-                            <div class="flex font-medium text-sm shrink-0">
-                                <button @click.stop="editCountdown(day)" class="bg-gray-50 dark:bg-gray-700 text-blue-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">改</button>
-                                <button @click.stop="deleteCountdown(day.id)" class="bg-gray-50 dark:bg-gray-700 text-red-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">删</button>
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-white">重要时刻</h2>
+                </div>
+                
+                <button @click="openCountdownModal('add')" class="bg-blue-600 text-white w-9 h-9 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 active:scale-90 transition shadow-blue-200 dark:shadow-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 pt-2 pb-24">
+                <div v-for="(list, listType) in {upcoming: upcomingList, expired: expiredList}" :key="listType">
+                    
+                    <div v-if="list.length > 0" class="mb-6">
+                        <div class="flex items-center mb-2 px-1">
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full" 
+                                :class="{
+                                    'text-blue-500 bg-blue-50 dark:bg-blue-900/30': listType === 'pinned',
+                                    'text-gray-500 bg-gray-100 dark:bg-gray-800': listType === 'upcoming',
+                                    'text-gray-400 bg-gray-100 dark:bg-gray-800 line-through': listType === 'expired'
+                                }">
+                                {{ listType === 'pinned' ? '已置顶' : (listType === 'upcoming' ? '即将到来' : '已过期') }}
+                            </span>
+                            <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <div v-for="day in list" :key="day.id" 
+                                 class="bg-white dark:bg-gray-800 rounded-xl shadow-sm flex items-stretch border-l-4 overflow-hidden relative select-none transition-transform active:scale-[0.98]" 
+                                 :class="[
+                                    day.color || (listType==='pinned'?'border-blue-500':'border-gray-400'),
+                                    listType === 'expired' ? 'opacity-60 grayscale' : '' 
+                                 ]">
+                                
+                                <div class="flex-1 flex flex-col justify-center p-3 pl-4">
+                                    <div class="font-bold text-gray-800 dark:text-gray-100 flex items-center" 
+                                         :class="{'line-through text-gray-400': listType === 'expired'}">
+                                        {{ day.name }}
+                                        <span v-if="day.isLunar" class="ml-2 text-[9px] bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-200 px-1 rounded-sm no-underline">农</span>
+                                    </div>
+                                    <div class="text-xs text-gray-400 mt-1 flex items-center">
+                                        <span>{{ day.date }}</span>
+                                        <span v-if="day.repeat && day.repeat !== 'none'" class="ml-2 bg-gray-100 dark:bg-gray-700 px-1 rounded text-[9px]">
+                                            {{ getRepeatText(day.repeat) }}
+                                        </span>
+                                    </div>
+                                    <div v-if="day.repeat !== 'none' || day.isLunar" class="text-[9px] text-blue-400 mt-0.5">
+                                        目标: {{ getDaysUntilData(day).targetDateStr }}
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-col justify-center items-end p-3 shrink-0 mr-1">
+                                    <div class="text-2xl font-bold leading-none" :class="getDaysUntilData(day).days >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">
+                                        {{ Math.abs(getDaysUntilData(day).days) }}
+                                    </div>
+                                    <div class="text-[10px] text-gray-400 mt-1">{{ getDaysUntilData(day).days >= 0 ? '天后' : '天前' }}</div>
+                                </div>
+                                
+                                <div class="flex font-medium text-sm shrink-0">
+                                    <button @click.stop="openCountdownModal('edit', day)" class="bg-gray-50 dark:bg-gray-700 text-blue-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">改</button>
+                                    <button @click.stop="deleteCountdown(day.id)" class="bg-gray-50 dark:bg-gray-700 text-red-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">删</button>
+                                </div>
                             </div>
                         </div>
-                        <button @click="addCountdown" class="w-full py-4 border-2 border-dashed border-gray-300 dark:border-gray-700 text-gray-400 rounded-xl hover:bg-white dark:hover:bg-gray-800 hover:border-blue-300 hover:text-blue-500 transition flex flex-col items-center">
-                            <span>+ 添加倒数日</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -367,6 +393,79 @@
             <button @click="deleteCurrentTask" class="w-full py-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-red-500 font-medium active:bg-gray-100">删除任务</button>
             <div class="h-2"></div>
             <button @click="closeEditModal" class="w-full py-3 bg-gray-100 dark:bg-gray-900 rounded-xl text-gray-500 font-bold active:bg-gray-200">取消</button>
+        </div>
+    </div>
+
+    <div v-if="showCountdownModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4" @click.self="closeCountdownModal">
+        <div class="bg-gray-100 dark:bg-gray-800 w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl animate-scale-up border dark:border-gray-700 transition-all">
+            <div class="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <button @click="closeCountdownModal" class="text-blue-600 dark:text-blue-400 text-sm font-medium">取消</button>
+                <span class="font-bold text-sm text-gray-800 dark:text-gray-100">{{ countdownFormMode === 'add' ? '新建倒数日' : '编辑倒数日' }}</span>
+                <button @click="saveCountdown" class="text-blue-600 dark:text-blue-400 text-sm font-bold">保存</button>
+            </div>
+            
+            <div class="p-4 space-y-4">
+                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm">
+                    <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center">
+                        <input v-model="countdownForm.name" type="text" placeholder="事件名称 (如: 生日)" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
+                    </div>
+                    <div class="py-3 flex items-center justify-between">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">日期</span>
+                        <input v-model="countdownForm.date" type="date" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none">
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 py-1 shadow-sm">
+                    <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex justify-between items-center">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">农历模式</span>
+                        <label class="ios-switch">
+                            <input type="checkbox" v-model="countdownForm.isLunar">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="py-3 flex justify-between items-center">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">重复</span>
+                        <select v-model="countdownForm.repeat" class="bg-transparent text-gray-500 dark:text-gray-300 text-sm outline-none dir-rtl appearance-none text-right pr-4">
+                            <option value="none">不重复</option>
+                            <option value="year">每年</option>
+                            <option value="month">每月</option>
+                            <option value="week">每周</option>
+                            <option value="day">每日</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <p class="text-[10px] text-center text-gray-400 px-2 leading-relaxed">
+                    开启“每年重复”将自动计算下一个纪念日。<br>
+                    如果是农历生日，请在上方选择该农历对应的<span class="text-blue-500">公历日期</span>，系统会自动转换。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showQuadrantModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4" @click.self="closeQuadrantModal">
+        <div class="bg-gray-100 dark:bg-gray-800 w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl animate-scale-up border dark:border-gray-700 transition-all">
+            <div class="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <button @click="closeQuadrantModal" class="text-blue-600 dark:text-blue-400 text-sm font-medium">取消</button>
+                <span class="font-bold text-sm text-gray-800 dark:text-gray-100">新建任务</span>
+                <button @click="saveQuadrantTask" class="text-blue-600 dark:text-blue-400 text-sm font-bold">保存</button>
+            </div>
+            
+            <div class="p-4 space-y-4">
+                <div class="text-center text-xs text-gray-400">
+                    添加到: <span class="font-bold" :class="{'text-red-500': quadrantForm.q===1, 'text-blue-500': quadrantForm.q===2, 'text-yellow-500': quadrantForm.q===3}">{{ quadrantTitles[quadrantForm.q-1] }}</span>
+                </div>
+
+                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm">
+                    <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center">
+                        <input v-model="quadrantForm.text" type="text" placeholder="准备做什么？" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
+                    </div>
+                    <div class="py-3 flex items-center justify-between">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (小时)</span>
+                        <input v-model="quadrantForm.duration" type="number" placeholder="0" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -410,7 +509,7 @@
 
 </div>
 <script>
-    const { createApp, ref, computed, watch, onMounted } = Vue;
+    const { createApp, ref, computed, watch, onMounted, reactive } = Vue;
 
     createApp({
         setup() {
@@ -463,6 +562,62 @@
                 { id: 1, name: '比特币减半预期', date: '2028-04-18', color: 'border-orange-500', pinned: true },
                 { id: 2, name: '春节', date: '2026-02-17', color: 'border-red-500', pinned: false },
             ]);
+
+            // --- 新增：倒数日表单逻辑 ---
+            const showCountdownModal = ref(false);
+            const countdownFormMode = ref('add');
+            const countdownForm = reactive({ id: null, name: '', date: '', isLunar: false, repeat: 'none' });
+
+            const openCountdownModal = (mode, item = null) => {
+                countdownFormMode.value = mode;
+                if (mode === 'edit' && item) {
+                    countdownForm.id = item.id;
+                    countdownForm.name = item.name;
+                    countdownForm.date = item.date;
+                    countdownForm.isLunar = !!item.isLunar; // 确保是布尔值
+                    countdownForm.repeat = item.repeat || 'none';
+                } else {
+                    countdownForm.id = Date.now();
+                    countdownForm.name = '';
+                    const today = new Date();
+                    // 默认设为今天 (YYYY-MM-DD)
+                    const y = today.getFullYear();
+                    const m = String(today.getMonth() + 1).padStart(2, '0');
+                    const d = String(today.getDate()).padStart(2, '0');
+                    countdownForm.date = `${y}-${m}-${d}`;
+                    countdownForm.isLunar = false;
+                    countdownForm.repeat = 'none';
+                }
+                showCountdownModal.value = true;
+            };
+
+            const closeCountdownModal = () => showCountdownModal.value = false;
+
+            const saveCountdown = () => {
+                if (!countdownForm.name || !countdownForm.date) { alert("请填写完整信息"); return; }
+                
+                const newItem = {
+                    id: countdownForm.id,
+                    name: countdownForm.name,
+                    date: countdownForm.date,
+                    isLunar: countdownForm.isLunar,
+                    repeat: countdownForm.repeat,
+                    pinned: false,
+                    color: 'border-blue-500'
+                };
+
+                if (countdownFormMode.value === 'add') {
+                    countdowns.value.push(newItem);
+                } else {
+                    const idx = countdowns.value.findIndex(c => c.id === countdownForm.id);
+                    if (idx !== -1) {
+                        newItem.pinned = countdowns.value[idx].pinned; // 保持置顶状态
+                        newItem.color = countdowns.value[idx].color;   // 保持颜色
+                        countdowns.value[idx] = newItem;
+                    }
+                }
+                closeCountdownModal();
+            };
 
             const isFocusing = ref(false);
             const defaultDuration = ref(25);
@@ -628,17 +783,45 @@
                 newTask.value = ''; newDuration.value = '';
             };
 
+            // --- 新增：四象限添加表单逻辑 ---
+            const showQuadrantModal = ref(false);
+            const quadrantForm = reactive({ q: 1, text: '', duration: '' });
+
+            // 修改后的点击函数：不再弹窗，而是打开模态框
             const addQuickTask = (quadrant) => {
-                const text = prompt(`添加任务到 [${quadrantTitles[quadrant-1]}]:`);
-                if (text) {
-                    let durationStr = prompt("计划工时(小时)?", "");
-                    let duration = (durationStr && !isNaN(durationStr)) ? Math.abs(parseFloat(durationStr)) : 0;
-                    tasks.value.push({
-                        id: Date.now(), text: text, done: false,
-                        date: formatDateKey(selectedDate.value),
-                        q: quadrant, duration: duration, accumulated: 0, log: [], expanded: false
-                    });
+                quadrantForm.q = quadrant;
+                quadrantForm.text = '';
+                quadrantForm.duration = '';
+                showQuadrantModal.value = true;
+            };
+
+            const closeQuadrantModal = () => showQuadrantModal.value = false;
+
+            const saveQuadrantTask = () => {
+                if (!quadrantForm.text.trim()) {
+                     alert("请输入任务内容"); 
+                     return; 
                 }
+                
+                let duration = 0;
+                if (quadrantForm.duration) {
+                    duration = Math.abs(parseFloat(quadrantForm.duration));
+                }
+
+                // 执行添加逻辑
+                tasks.value.push({
+                    id: Date.now(), 
+                    text: quadrantForm.text, 
+                    done: false,
+                    date: formatDateKey(selectedDate.value),
+                    q: quadrantForm.q, 
+                    duration: duration, 
+                    accumulated: 0, 
+                    log: [], 
+                    expanded: false
+                });
+                
+                closeQuadrantModal();
             };
 
             const toggleTask = (task) => task.done = !task.done;
@@ -671,8 +854,34 @@
                 const key = formatDateKey(selectedDate.value);
                 return tasks.value.filter(t => t.q === 0 && t.date === key).sort((a,b) => a.done - b.done);
             });
-            const pinnedCountdowns = computed(() => countdowns.value.filter(c => c.pinned).sort((a,b) => getDaysUntil(a.date) - getDaysUntil(b.date)));
-            const unpinnedCountdowns = computed(() => countdowns.value.filter(c => !c.pinned).sort((a,b) => getDaysUntil(a.date) - getDaysUntil(b.date)));
+            
+            // --- 核心分类逻辑升级 ---
+            
+            // 辅助：获取天数
+            const getD = (c) => getDaysUntilData(c).days;
+
+            // 1. 首页列表：只显示 0 <= 天数 <= 10 的事件 (未来10天内)
+            const homeUpcomingList = computed(() => {
+                return countdowns.value
+                    .filter(c => {
+                        const days = getD(c);
+                        return days >= 0 && days <= 10; 
+                    })
+                    .sort((a, b) => getD(a) - getD(b));
+            });
+
+            // 2. 倒数日页 - 即将到来 (所有未来事件，按时间排序，不分置顶)
+            const upcomingList = computed(() => countdowns.value
+                .filter(c => getD(c) >= 0)
+                .sort((a,b) => getD(a) - getD(b))
+            );
+
+            // 4. 倒数日页 - 已过期组 (所有天数 < 0 的，无论是否置顶都归到这里)
+            const expiredList = computed(() => countdowns.value
+                .filter(c => getD(c) < 0)
+                .sort((a,b) => getD(b) - getD(a)) // 过期越久的排越下面(或者反过来)
+            );
+
             const progressTasks = computed(() => tasks.value.filter(t => t.duration > 0));
             const progressStats = computed(() => {
                 const list = progressTasks.value;
@@ -749,7 +958,79 @@
                 return 'text-gray-600 dark:text-gray-400';
             };
             const hasTask = (date) => { const key = formatDateKey(date); return tasks.value.some(t => t.date === key && !t.done); };
-            const getDaysUntil = (dateStr) => { const t = new Date(dateStr); const now = new Date(); t.setHours(0,0,0,0); now.setHours(0,0,0,0); return Math.ceil((t - now) / (1000 * 60 * 60 * 24)); };
+            // --- 核心升级：支持农历和重复周期的计算 ---
+            const getDaysUntilData = (item) => {
+                const now = new Date();
+                now.setHours(0,0,0,0);
+                
+                let targetDate = new Date(item.date);
+                targetDate.setHours(0,0,0,0);
+                let nextDate = new Date(targetDate);
+                const todayTime = now.getTime();
+
+                if (item.repeat === 'none' && !item.isLunar) {
+                    // 普通不重复，直接计算
+                } else {
+                    // 辅助：从公历年推算该年对应的农历日期（返回公历Date对象）
+                    const getSolarFromLunar = (solarYear, lMonth, lDay) => {
+                        let candidates = [];
+                        for (let y = solarYear - 1; y <= solarYear + 1; y++) {
+                            try {
+                                const l = Lunar.fromYmd(y, Math.abs(lMonth), lDay); 
+                                const s = l.getSolar();
+                                const d = new Date(s.getYear(), s.getMonth() - 1, s.getDay());
+                                candidates.push(d);
+                            } catch(e) {}
+                        }
+                        return candidates;
+                    };
+
+                    if (item.isLunar) {
+                        const baseLunar = Lunar.fromDate(new Date(item.date));
+                        const lMonth = baseLunar.getMonth();
+                        const lDay = baseLunar.getDay();
+                        
+                        const candidates = getSolarFromLunar(now.getFullYear(), lMonth, lDay);
+                        candidates.sort((a,b) => a-b);
+                        const future = candidates.find(d => d.getTime() >= todayTime - 86400000); 
+                        if (future) nextDate = future;
+                    } else {
+                        // 公历重复逻辑
+                        if (item.repeat === 'year') {
+                            nextDate.setFullYear(now.getFullYear());
+                            if (nextDate.getTime() < todayTime - 86400000) nextDate.setFullYear(now.getFullYear() + 1);
+                        } else if (item.repeat === 'month') {
+                            nextDate.setFullYear(now.getFullYear());
+                            nextDate.setMonth(now.getMonth());
+                            if (nextDate.getTime() < todayTime - 86400000) nextDate.setMonth(now.getMonth() + 1);
+                        } else if (item.repeat === 'week') {
+                            const targetDay = new Date(item.date).getDay();
+                            const currentDay = now.getDay();
+                            let diff = targetDay - currentDay;
+                            if (diff < 0) diff += 7;
+                            nextDate = new Date(now);
+                            nextDate.setDate(now.getDate() + diff);
+                        } else if (item.repeat === 'day') {
+                            nextDate = new Date(now);
+                        }
+                    }
+                }
+
+                const diffTime = nextDate - now;
+                const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                const y = nextDate.getFullYear();
+                const m = String(nextDate.getMonth()+1).padStart(2,'0');
+                const d = String(nextDate.getDate()).padStart(2,'0');
+                
+                return { days, targetDateStr: `${y}-${m}-${d}` };
+            };
+            
+            const getRepeatText = (r) => {
+                const map = { 'none': '', 'year': '每年', 'month': '每月', 'week': '每周', 'day': '每日' };
+                return map[r] || '';
+            };
+
             const addCountdown = () => { const n = prompt("事件:"); if(!n) return; const d = prompt("日期(YYYY-MM-DD):"); if(n&&d) countdowns.value.push({ id: Date.now(), name: n, date: d, color: 'border-blue-500', pinned: false }); };
             const deleteCountdown = (id) => { if(confirm('删除?')) countdowns.value = countdowns.value.filter(c => c.id !== id); };
             const editCountdown = (item) => { const n = prompt("名称:", item.name); const d = prompt("日期:", item.date); if(n&&d) { item.name = n; item.date = d; } };
@@ -758,15 +1039,23 @@
                 isDark, toggleTheme, // 新增
                 currentTab, showCalendar, toggleCalendar: () => showCalendar.value = !showCalendar.value,
                 isFocusing, newTask, newDuration, 
-                activeQuadrantTasks, inboxTasks, pinnedCountdowns, unpinnedCountdowns,
+                activeQuadrantTasks, inboxTasks, 
+                homeUpcomingList,  upcomingList, expiredList,
                 quadrantTitles, progressStats, progressTasks, 
                 currentYear, currentMonth, lunarMonthStr, daysInMonth, firstDayOfWeek,
                 selectedDate, changeMonth, jumpToToday, selectDate, getDayClass,
                 getLunarClass,
                 defaultDuration, toggleTimerMode, timeLeft, formatTime, startTimer, stopTimer,
                 todayPomodoros, addTask, toggleTask, deleteTask, addQuickTask,
+                showQuadrantModal, quadrantForm, closeQuadrantModal, saveQuadrantTask,
                 getTasksByQ: (q) => tasks.value.filter(t => t.q === q), hasTask,
-                getDaysUntil, addCountdown, deleteCountdown, editCountdown,
+                // 新的计算函数
+                getDaysUntilData, 
+                getRepeatText, 
+                // 保留删除
+                deleteCountdown, 
+                // 新的弹窗逻辑
+                showCountdownModal, countdownForm, openCountdownModal, closeCountdownModal, saveCountdown, countdownFormMode,
                 startPress, cancelPress, currentFocusTask,
                 // Modal
                 editingTask, openEditModal, closeEditModal, editTaskText, editTaskDuration, deleteCurrentTask,
@@ -778,4 +1067,5 @@
 </script>
 </body>
 </html>
+
 
