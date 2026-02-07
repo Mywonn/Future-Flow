@@ -50,10 +50,15 @@
         input:checked + .slider:before { transform: translateX(20px); }
 
         #app {
-            padding-top: env(safe-area-inset-top);
+            
             padding-bottom: env(safe-area-inset-bottom);
             min-height: 100vh;
             box-sizing: border-box;
+        }
+
+        /* 2. 新增一个类：专门给顶部栏使用，让背景色延伸上去，但内容不被挡住 */
+        .safe-top {
+            padding-top: env(safe-area-inset-top);
         }
     </style>
 </head>
@@ -61,7 +66,7 @@
 
 <div id="app" class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" v-cloak>
 
-    <div v-if="isFocusing" class="absolute inset-0 z-50 bg-blue-600 dark:bg-blue-900 text-white flex flex-col items-center justify-center space-y-8 animate-fade-in">
+    <div v-if="isFocusing" class="absolute inset-0 z-50 bg-blue-600 dark:bg-blue-900 text-white flex flex-col items-center justify-center space-y-8 animate-fade-in safe-top">
         <div class="text-6xl font-mono font-bold">{{ formatTime(timeLeft) }}</div>
         <div class="text-xl opacity-90 px-8 text-center">{{ currentFocusTask ? currentFocusTask.text : '专注模式' }}</div>
         <div class="flex flex-col space-y-4">
@@ -70,7 +75,7 @@
         </div>
     </div>
 
-    <div v-else class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700">
+    <div v-else class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700 safe-top">
         <div class="px-4 py-3">
             <div class="flex justify-between items-center">
                 <div class="flex items-center space-x-3">
@@ -542,12 +547,20 @@
                 const savedTheme = localStorage.getItem('mike_theme');
                 const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 
-                if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+                if (savedTheme === 'dark') {
                     isDark.value = true;
-                } else {
+                } else if (savedTheme === 'light') {
                     isDark.value = false;
+                } else {
+                    isDark.value = systemDark;
                 }
                 updateTheme();
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                    // 只有当用户没有“强制”手动锁定过主题时，才自动跟随（或者你可以选择总是跟随）
+                    // 这里为了体验顺滑，我们让它总是跟随系统变化更新
+                    isDark.value = e.matches;
+                    updateTheme();
+                });
             });
 
             // --- 原有逻辑 ---
