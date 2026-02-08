@@ -116,8 +116,11 @@
     </style> 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
+<div id="app" 
+     class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" 
+     @click="handleBackgroundClick"
+     v-cloak>
 
-<div id="app" class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" v-cloak>
 
 <div v-else class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700 safe-top">
         
@@ -353,7 +356,7 @@
                                     @mouseup.stop 
                                     @click.stop="task.expanded = true" 
                                     class="text-gray-300 hover:text-blue-600 px-1.5 py-1 text-lg leading-none transition-colors" title="添加子步骤">
-                                    +
+                                    
                                 </button>
 
                                 <button 
@@ -451,17 +454,24 @@
                             <div class="h-14 relative flex items-center px-3 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
                                 @touchstart="handleTouchStart(t, $event)"
                                 @touchmove="handleTouchMove($event)"
-                                @touchend.prevent="handleTouchEnd(t)"
+                                @touchend="handleTouchEnd(t)" 
+                                @click="handleTaskClick(t)"
                                 @mousedown="handleTouchStart(t)" 
                                 @mouseup="handleTouchEnd(t)"
                                 @mouseleave="handleTouchMove">
                                 
-                                <button @touchstart.stop @mousedown.stop @click.stop="toggleTask(t)" class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 flex items-center">
+                                <button 
+                                    @touchstart.stop 
+                                    @touchend.stop 
+                                    @mousedown.stop 
+                                    @mouseup.stop 
+                                    @click.stop="toggleTask(t)" 
+                                    class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 flex items-center p-2 -ml-2">
                                     <div v-if="t.done" class="text-blue-500 text-lg">☑</div>
                                     <div v-else class="w-5 h-5 border-2 border-current rounded-full"></div>
                                 </button>
 
-                                <div class="flex-1 flex flex-col justify-center min-w-0 pr-16"> 
+                                <div class="flex-1 flex flex-col justify-center min-w-0 pr-10"> 
                                     <div :class="{'line-through text-gray-400': t.done}" class="truncate text-sm font-medium text-gray-700 dark:text-gray-200 leading-tight">
                                         {{ t.text }}
                                     </div>
@@ -475,14 +485,18 @@
                                     <span v-if="t.repeat && t.repeat !== 'none'" class="text-blue-400 font-bold">↺</span>
                                     <span v-if="t.startDate || t.endDate">
                                         {{ t.startDate ? t.startDate.slice(5).replace('-','.') : '' }}
-                                        <span v-if="t.startDate && t.endDate">-</span>
-                                        {{ t.endDate ? t.endDate.slice(5).replace('-','.') : '' }}
                                     </span>
                                 </div>
 
-                                <div class="absolute bottom-1 right-2 flex items-center space-x-2">
-                                    <button v-if="!t.done" @touchstart.stop @mousedown.stop @click.stop="startTimer(t)" class="text-gray-300 hover:text-blue-600 p-0.5">
-                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                <div class="absolute bottom-1 right-2 flex items-center space-x-3">
+                                    <button 
+                                        v-if="!t.done" 
+                                        @touchstart.stop 
+                                        @touchend.stop 
+                                        @mousedown.stop 
+                                        @click.stop="t.expanded = true" 
+                                        class="text-gray-300 hover:text-blue-600 p-1 font-bold text-sm" title="添加子步骤">
+                                        
                                     </button>
                                     
                                     <div class="text-gray-300 transition-transform duration-300 text-[10px] p-0.5" :class="{'rotate-180': t.expanded}">
@@ -1223,10 +1237,16 @@
                 quadrantForm.text = '';
                 quadrantForm.duration = '';
                 
-                // 默认填入今天
-                const today = getTodayStr();
-                quadrantForm.startDate = today; 
-                quadrantForm.endDate = today; 
+                // 修正：使用【当前日历选中的日期】而不是【今天】
+                // 这样你看着哪天，任务就加在哪天
+                const d = new Date(selectedDate.value);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+
+                quadrantForm.startDate = dateStr; 
+                quadrantForm.endDate = dateStr; 
                 
                 quadrantForm.repeat = 'none';
                 showQuadrantModal.value = true;
@@ -1365,6 +1385,20 @@
                 
                 // 正常点击，执行展开/收起
                 task.expanded = !task.expanded;
+            };
+
+            // --- 新增：安全地点击背景收起键盘 ---
+            // 只要输入框加了 .stop，这个函数就永远不会在点击输入框时触发，绝对安全
+            const handleBackgroundClick = (e) => {
+                const targetTag = e.target.tagName;
+                
+                // 如果点击的是按钮、链接或其他交互元素，通常不需要强制失焦，交给系统默认行为
+                // 但点击 div, section, body 等空白容器时，强制收起键盘
+                if (targetTag === 'DIV' || targetTag === 'SECTION' || targetTag === 'BODY' || targetTag === 'HTML') {
+                    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+                        document.activeElement.blur();
+                    }
+                }
             };
 
             // --- 补全：子任务逻辑 ---
@@ -1749,7 +1783,7 @@
                 editingTask, openEditModal, closeEditModal, deleteCurrentTask, editForm, saveEditTask,
                 showSyncModal, githubToken, gistId, handleSync, syncStatus,
                 // 下面这一行之前少了个逗号，现在补上了
-                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask
+                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask, handleBackgroundClick,
                 
             };
         }
