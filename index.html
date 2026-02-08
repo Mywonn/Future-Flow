@@ -98,6 +98,15 @@
         }
 
         /* --- 修复 iOS PWA 输入框无法聚焦的问题 --- */
+        
+        /* 1. 全局禁止长按菜单和选择，模拟原生 App 质感 */
+        * {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* --- 修复 iOS PWA 输入框无法聚焦的问题 --- */
         input, textarea, [contenteditable] {
             -webkit-user-select: text !important;
             user-select: text !important;
@@ -108,8 +117,8 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
 
-<div id="app" @click="handleAppClick" class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" v-cloak>
-    
+<div id="app" class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" v-cloak>
+
 <div v-else class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700 safe-top">
         
         <div class="flex flex-col w-full">
@@ -1314,13 +1323,18 @@
                 clearTimeout(pressTimer);
             };
 
+            // 1. 触摸结束只负责清理定时器，不处理业务逻辑
             const handleTouchEnd = (task) => {
                 clearTimeout(pressTimer);
+            };
+
+            // 2. 新增：专门处理点击展开，利用 Click 事件的天然延迟避免冲突
+            const handleTaskClick = (task) => {
+                // 如果是长按触发了编辑，或者正在滚动，则不展开
+                if (isLongPress || isScrolling) return;
                 
-                // 只有当：不是长按 且 不是滚动 时，才执行展开/收起
-                if (!isLongPress && !isScrolling) {
-                    task.expanded = !task.expanded;
-                }
+                // 正常点击，执行展开/收起
+                task.expanded = !task.expanded;
             };
 
             // --- 补全：子任务逻辑 ---
@@ -1556,15 +1570,6 @@
                 }
             };
 
-            // --- 新增：点击背景收起键盘 ---
-            const handleAppClick = (e) => {
-                // 如果点击的目标不是输入框或文本域，强制让当前的焦点元素失焦
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-                        document.activeElement.blur();
-                    }
-                }
-            };
 
             const jumpToToday = () => { const t = new Date(); currentYear.value = t.getFullYear(); currentMonth.value = t.getMonth(); selectedDate.value = t; };
             const selectDate = (day) => selectedDate.value = day.date;
@@ -1710,11 +1715,11 @@
                 deleteCountdown, 
                 showTimeSelect, showTimerAction, handleTimerClick, setDuration, closeTimerMenus,
                 showCountdownModal, countdownForm, openCountdownModal, closeCountdownModal, saveCountdown, countdownFormMode,
-                startPress, cancelPress, currentFocusTask,handleAppClick,
+                startPress, cancelPress, currentFocusTask, // handleAppClick 已删除
                 editingTask, openEditModal, closeEditModal, deleteCurrentTask, editForm, saveEditTask,
                 showSyncModal, githubToken, gistId, handleSync, syncStatus,
                 // 下面这一行之前少了个逗号，现在补上了
-                handleTouchStart, handleTouchMove, handleTouchEnd, addSubtask, toggleSubtask, deleteSubtask
+                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask
                 
             };
         }
