@@ -311,13 +311,14 @@
                         :class="{'opacity-70': task.done}"> 
                         
                         <div class="p-3 flex items-center group relative cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
-                             @touchstart="handleTouchStart(task)"
-                             @touchmove="handleTouchMove"
-                             @touchend.prevent="handleTouchEnd(task)"
-                             @mousedown="handleTouchStart(task)" 
-                             @mouseup="handleTouchEnd(task)"
-                             @mouseleave="handleTouchMove"
-                             >
+                            @touchstart="handleTouchStart(task, $event)"
+                            @touchmove="handleTouchMove($event)"
+                            @touchend="handleTouchEnd(task)" 
+                            @click="handleTaskClick(task)"
+                            @mousedown="handleTouchStart(task)" 
+                            @mouseup="handleTouchEnd(task)"
+                            @mouseleave="handleTouchMove"
+                            >
                             
                             <button 
                                 @touchstart.stop 
@@ -448,8 +449,8 @@
                             class="bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden group/card shrink-0">
                             
                             <div class="h-14 relative flex items-center px-3 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
-                                @touchstart="handleTouchStart(t)"
-                                @touchmove="handleTouchMove"
+                                @touchstart="handleTouchStart(t, $event)"
+                                @touchmove="handleTouchMove($event)"
                                 @touchend.prevent="handleTouchEnd(t)"
                                 @mousedown="handleTouchStart(t)" 
                                 @mouseup="handleTouchEnd(t)"
@@ -1177,6 +1178,8 @@
                 return `${year}-${month}-${day}`;
             };
 
+
+
             const addTask = () => {
                 if (!newTask.value.trim()) return;
                 let duration = 0;
@@ -1303,14 +1306,24 @@
                 }
             };
 
-            // --- 修复：长按 vs 单击 逻辑 (解决双重触发和滚动误触) ---
-            // let pressTimer = null; // (注意：这一行不要加，因为上面第 1184 行已经定义过了)
+           // --- 修复：长按 vs 单击 逻辑 (解决双重触发和滚动误触) ---
             let isLongPress = false; 
-            let isScrolling = false; // 新增：标记是否正在滚动
+            let isScrolling = false; 
+            
+            // 新增：记录列表触摸的起始坐标，用于判断是否真的在滚动
+            const listTouchStartX = ref(0);
+            const listTouchStartY = ref(0);
 
-            const handleTouchStart = (task) => {
-                isScrolling = false; // 每次按下时，重置滚动状态
+            const handleTouchStart = (task, e) => {
+                isScrolling = false; 
                 isLongPress = false;
+                
+                // 1. 记录按下的初始坐标
+                if (e && e.touches && e.touches.length > 0) {
+                    listTouchStartX.value = e.touches[0].clientX;
+                    listTouchStartY.value = e.touches[0].clientY;
+                }
+
                 pressTimer = setTimeout(() => {
                     isLongPress = true; 
                     if(navigator.vibrate) navigator.vibrate(50);
@@ -1318,9 +1331,26 @@
                 }, 600);
             };
 
-            const handleTouchMove = () => {
-                isScrolling = true; // 手指移动了，标记为正在滚动
-                clearTimeout(pressTimer);
+            const handleTouchMove = (e) => {
+                clearTimeout(pressTimer); // 只要动了，就取消长按定时器
+
+                // 2. 计算移动距离
+                if (e && e.changedTouches && e.changedTouches.length > 0) {
+                    const x = e.changedTouches[0].clientX;
+                    const y = e.changedTouches[0].clientY;
+                    
+                    const moveX = Math.abs(x - listTouchStartX.value);
+                    const moveY = Math.abs(y - listTouchStartY.value);
+
+                    // 3. 只有当移动距离超过 10px 时，才判定为“滚动”
+                    // 这样可以忽略手指点击时的微小震颤
+                    if (moveX > 10 || moveY > 10) {
+                        isScrolling = true;
+                    }
+                } else {
+                    // 如果没有事件对象（比如 mouseleave），为了安全起见视为滚动
+                    isScrolling = true;
+                }
             };
 
             // 1. 触摸结束只负责清理定时器，不处理业务逻辑
