@@ -115,6 +115,44 @@
             /* 防止点击高亮导致的视觉干扰 */
             -webkit-tap-highlight-color: transparent; 
         }
+        /* 1. 容器：确保 4 个字能露出来 */
+        .marquee-box {
+            position: relative;
+            display: block;
+            overflow: hidden;
+            white-space: nowrap;
+            width: 100%;
+            /* 将遮罩边缘从 5% 压到 3%，把显示区域撑到最大 */
+            mask-image: linear-gradient(to right, transparent, black 3%, black 97%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 3%, black 97%, transparent);
+        }
+
+        /* 2. 动画：维持单向循环 + 精准停靠 */
+        .animate-marquee {
+            position: relative;
+            display: inline-block;
+            min-width: 100%; 
+            padding-left: 1px;
+            animation: marquee-scroll 7s linear infinite; /* 稍微减速，方便阅读 */
+        }
+
+        @keyframes marquee-scroll {
+            /* 0%-30%: 停在开头，让你看清前 4 个字 */
+            0%, 30% { 
+                left: 0;
+                transform: translateX(0);
+            }
+            /* 70%-85%: 刚好滚动到最后一个字贴住右边界，停顿约 1 秒 */
+            70%, 85% { 
+                left: 100%;
+                transform: translateX(-100%);
+            }
+            /* 95%-100%: 快速滑回开头重播 */
+            95%, 100% {
+                left: 0;
+                transform: translateX(0);
+            }
+        }
     </style> 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
@@ -173,7 +211,10 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                     </button>
 
-                    <div ref="dateScrollContainer" class="flex-1 flex overflow-x-auto no-scrollbar items-center space-x-3 mask-image-fade pr-1">
+                    <div ref="dateScrollContainer" 
+                    @touchstart="handleHeaderTouchStart" 
+                    @touchend="handleHeaderTouchEnd" 
+                    class="flex-1 flex overflow-x-auto no-scrollbar items-center space-x-3 mask-image-fade pr-1">
                             <div v-for="day in stripDays" 
                                 :key="day.dateStr" 
                                 :id="'day-' + day.dateStr"
@@ -209,9 +250,9 @@
                 </div>
             </div>
             <div v-if="showCalendar && ['now', 'quadrant'].includes(currentTab)" 
-                 @click="toggleCalendar" 
-                 class="absolute top-full left-0 w-full h-[150vh] z-40 cursor-pointer"
-                 style="touch-action: none;">
+                @click="toggleCalendar" 
+                class="fixed inset-0 bg-black/30 z-40 cursor-pointer"
+                style="touch-action: none;">
             </div>
 
             <div v-if="showCalendar || ['progress', 'countdown'].includes(currentTab)" 
@@ -262,7 +303,7 @@
             <div class="shrink-0 bg-white dark:bg-gray-900 z-30 pt-4 px-4 pb-3 shadow-sm/50">
 
                 <div class="flex items-center bg-gray-100 dark:bg-gray-800 rounded-2xl p-1.5 transition-all shadow-inner dark:shadow-none ring-1 ring-transparent focus-within:bg-white dark:focus-within:bg-gray-700 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/50 focus-within:shadow-md">
-                    <div class="bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl mr-2 shadow-md shrink-0 select-none">
+                    <div class="bg-blue-600 text-white text-xs font-black px-3 h-8 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30 mr-2 shrink-0 select-none">
                         今日专注
                     </div>
                     <input v-model="newTask" @keyup.enter="addTask" 
@@ -286,14 +327,13 @@
 
             <div class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
                 <div class="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-                    
-                    <div v-if="inboxTasks.length === 0" class="text-center py-10 opacity-30 text-gray-500 dark:text-gray-400">
-                        <p class="text-xs">暂无临时任务</p>
+    
+                    <div v-if="activeInboxTasks.length === 0" class="text-center py-10 opacity-30 text-gray-500 dark:text-gray-400">
+                        <p class="text-xs">暂无进行中的任务</p>
                     </div>
 
-                    <div v-for="task in inboxTasks" :key="task.id" 
-                        class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm mb-2.5 overflow-hidden transition-all duration-300 ring-1 ring-gray-100/50 dark:ring-white/5 hover:shadow-md"
-                        :class="{'opacity-60 grayscale': task.done}">
+                    <div v-for="task in activeInboxTasks" :key="task.id" 
+                        class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm mb-2.5 overflow-hidden transition-all duration-300 ring-1 ring-gray-100/50 dark:ring-white/5 hover:shadow-md">
                         
                         <div class="p-3 flex items-center group relative cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
                             @touchstart="handleTouchStart(task, $event)"
@@ -304,75 +344,62 @@
                             @mouseup="handleTouchEnd(task)"
                             @mouseleave="handleTouchMove">
                             
-                            <button 
-                                @touchstart.stop 
-                                @touchend.stop 
-                                @mousedown.stop 
-                                @mouseup.stop 
-                                @click.stop="toggleTask(task)" 
-                                class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 transition-colors p-1 -ml-1">
-                                <div v-if="task.done" class="text-blue-500 text-lg">☑</div>
-                                <div v-else class="w-5 h-5 border-2 border-current rounded-full"></div>
+                            <button @touchstart.stop @touchend.stop @mousedown.stop @mouseup.stop @click.stop="toggleTask(task)" class="mr-3 shrink-0 p-1 -ml-1 opacity-80">
+                                <div class="w-5 h-5 border-2 rounded-full transition-all duration-300" 
+                                    :class="isTaskDone(task, selectedDate) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 text-gray-300'">
+                                </div>
                             </button>
 
                             <div class="flex-1 min-w-0">
-                                <span :class="{'line-through text-gray-400': task.done}" 
-                                    class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block leading-relaxed">
+                                <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block leading-relaxed">
                                     {{ task.text }}
                                 </span>
                                 <div v-if="task.duration > 0" class="mt-1 h-1 w-24 bg-red-100 dark:bg-gray-700 rounded-full overflow-hidden">
                                     <div class="h-full bg-blue-500 rounded-full" :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }"></div>
                                 </div>
-                                <div v-if="task.subtasks && task.subtasks.length > 0" class="text-[10px] text-gray-400 mt-0.5">
-                                    {{ task.subtasks.filter(s=>s.done).length }}/{{ task.subtasks.length }} 子项
-                                </div>
                             </div>
 
                             <div class="flex items-center space-x-2 ml-2">
-                               <button 
-                                    @touchstart.stop 
-                                    @touchend.stop 
-                                    @click.stop="task.expanded = true" 
-                                    class="text-gray-300 hover:text-blue-600 p-1 transition-colors" title="添加子步骤">
-                                   
-                                </button>
-                                <button 
-                                    v-if="!task.done" 
-                                    @touchstart.stop 
-                                    @touchend.stop 
-                                    @click.stop="startTimer(task)" 
-                                    class="text-gray-300 hover:text-blue-600 p-1 transition-colors">
-                                    ▶
-                                </button>
-                                <div class="text-gray-300 transition-transform duration-300 text-xs px-1" :class="{'rotate-180': task.expanded}">
-                                    ▼
-                                </div>
+                                <button v-if="!isTaskDone(task, selectedDate)" @touchstart.stop @touchend.stop @click.stop="startTimer(task)" class="text-gray-300 hover:text-blue-600 p-1 transition-colors">▶</button>
+                                <div class="text-gray-300 transition-transform duration-300 text-xs px-1" :class="{'rotate-180': task.expanded}">▼</div>
                             </div>
                         </div>
 
                         <div v-if="task.expanded" class="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 px-3 py-2 animate-fade-in">
-                            <div v-if="task.subtasks && task.subtasks.length > 0" class="space-y-2 mb-2">
-                                <div v-for="sub in task.subtasks" :key="sub.id" class="flex items-center group/sub">
-                                    <button @click="toggleSubtask(sub)" class="mr-2 text-gray-400 hover:text-blue-500">
-                                        <div v-if="sub.done" class="text-blue-500 text-sm">☑</div>
-                                        <div v-else class="w-3.5 h-3.5 border border-current rounded-sm"></div>
+                            <div v-if="task.subtasks && task.subtasks.length > 0" class="space-y-1 mb-2">
+                                <div v-for="sub in task.subtasks" :key="sub.id" class="flex items-start group/sub">
+                                    <button @click.stop="toggleSubtask(sub)" class="mr-2 mt-0.5 text-gray-400 hover:text-blue-500 shrink-0">
+                                        <div v-if="sub.done" class="text-blue-500 text-xs">☑</div>
+                                        <div v-else class="w-3 h-3 border border-current rounded-sm"></div>
                                     </button>
-                                    <span :class="{'line-through text-gray-400': sub.done}" class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all">
-                                        {{ sub.text }}
-                                    </span>
-                                    <button @click="deleteSubtask(task, sub.id)" class="text-gray-300 hover:text-red-400 ml-2 px-2">×</button>
+                                    <span :class="{'line-through text-gray-400': sub.done}" class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5">{{ sub.text }}</span>
+                                    <button @click.stop="deleteSubtask(task, sub.id)" class="text-gray-300 hover:text-red-400 ml-1 px-1 text-[10px]">×</button>
                                 </div>
                             </div>
-                            <div class="flex items-center">
+                            <div class="flex items-center bg-white dark:bg-gray-800 rounded px-2 py-1 border border-gray-100 dark:border-gray-600">
                                 <span class="text-gray-400 text-xs mr-2">↳</span>
-                                <input type="text" 
-                                       placeholder="添加子步骤 (回车)" 
-                                       @touchstart.stop 
-                                        @touchend.stop
-                                        @click.stop
-                                       class="flex-1 bg-transparent text-xs outline-none text-gray-600 dark:text-gray-300 placeholder-gray-400 py-1"
-                                       @keyup.enter="addSubtask(task, $event)"
-                                       @blur="addSubtask(task, $event)">
+                                <input type="text" placeholder="添加步骤..." class="flex-1 bg-transparent text-xs outline-none text-gray-600 dark:text-gray-300 placeholder-gray-400" @click.stop @keyup.enter="addSubtask(task, $event)" @blur="addSubtask(task, $event)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="completedInboxTasks.length > 0" class="mt-4 mb-10">
+                        <button @click="showCompletedInbox = !showCompletedInbox" 
+                                class="w-full py-2 flex items-center justify-center space-x-2 text-gray-400 hover:text-blue-500 transition-colors">
+                            <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800"></div>
+                            <span class="text-[10px] font-bold tracking-widest uppercase">
+                                {{ showCompletedInbox ? '隐藏已完成' : '查看 ' + completedInboxTasks.length + ' 项已完成' }}
+                            </span>
+                            <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800"></div>
+                        </button>
+
+                        <div v-if="showCompletedInbox" class="mt-3 space-y-2 opacity-60">
+                            <div v-for="task in completedInboxTasks" :key="task.id" 
+                                class="bg-gray-50/50 dark:bg-gray-800/40 rounded-xl px-3 py-2 flex items-center border border-dashed border-gray-100 dark:border-gray-700">
+                                <button @click.stop="toggleTask(task)" class="mr-3 opacity-80">
+                                    <div class="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center text-white text-[8px]">✓</div>
+                                </button>
+                                <span class="line-through text-xs text-gray-400 truncate">{{ task.text }}</span>
                             </div>
                         </div>
                     </div>
@@ -405,7 +432,9 @@
                               }">
                             
                             <button @touchstart.stop @click.stop="toggleTask(task)" class="mr-2 shrink-0 p-1 -ml-1 opacity-60">
-                                <div class="w-3.5 h-3.5 border-2 border-current rounded-full transition-colors" :class="{'bg-blue-500 border-blue-500 opacity-100': task.done, 'text-gray-300': !task.done}"></div>
+                                <div class="w-3.5 h-3.5 border-2 border-current rounded-full transition-all" 
+                                    :class="isTaskDone(task, selectedDate) ? 'bg-blue-600 border-blue-600 opacity-100' : 'text-gray-300 border-gray-300'">
+                                </div>
                             </button>
 
                             <div class="flex-1 min-w-0 flex flex-col justify-center mr-1">
@@ -436,13 +465,18 @@
                         <div v-if="homeUpcomingList.length === 0" class="w-full text-xs text-gray-300 text-center py-6">无近期事项</div>
                         
                         <div v-for="day in homeUpcomingList" :key="day.id" 
-    class="inline-flex flex-col justify-between shrink-0 w-[40%] h-full bg-blue-50/60 dark:bg-gray-800 rounded-2xl px-3 py-2.5 relative overflow-hidden active:scale-95 transition-transform border border-gray-100 dark:border-gray-800/50">
+                            class="inline-flex flex-col justify-between shrink-0 w-[43%] h-full bg-blue-50/60 dark:bg-gray-800 rounded-2xl px-2 py-2.5 relative overflow-hidden active:scale-95 transition-transform border border-gray-100 dark:border-gray-800/50">
                             
                             <div class="absolute -right-2 -bottom-2 text-5xl opacity-[0.03] select-none pointer-events-none rotate-12">⏳</div>
 
                             <div class="flex justify-between items-start mb-0.5">
-                                <span class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{{ day.name }}</span>
-                                <span v-if="day.isLunar" class="text-[8px] bg-red-100 text-red-600 px-1 rounded font-bold scale-90">农</span>
+                                <div class="marquee-box flex-1 mr-0.5">
+                                    <span class="text-xs font-bold text-gray-700 dark:text-gray-200"
+                                        :class="{'animate-marquee': day.name.length > 4}">
+                                        {{ day.name }}
+                                    </span>
+                                </div>
+                                <span v-if="day.isLunar" class="shrink-0 text-[8px] bg-red-100 text-red-600 px-0.5 rounded font-bold scale-90">农</span>
                             </div>
                             
                             <div class="flex items-baseline space-x-0.5 my-auto">
@@ -484,19 +518,14 @@
                                 @mouseup="handleTouchEnd(t)"
                                 @mouseleave="handleTouchMove">
                                 
-                                <button 
-                                    @touchstart.stop 
-                                    @touchend.stop 
-                                    @mousedown.stop 
-                                    @mouseup.stop 
-                                    @click.stop="toggleTask(t)" 
-                                    class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 flex items-center p-2 -ml-2">
-                                    <div v-if="t.done" class="text-blue-500 text-lg">☑</div>
-                                    <div v-else class="w-5 h-5 border-2 border-current rounded-full"></div>
+                                <button @touchstart.stop @touchend.stop @mousedown.stop @mouseup.stop @click.stop="toggleTask(t)" class="mr-3 shrink-0 p-1 -ml-1 opacity-80">
+                                    <div class="w-5 h-5 border-2 rounded-full transition-all duration-300" 
+                                        :class="isTaskDone(t, selectedDate) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 text-gray-300'">
+                                    </div>
                                 </button>
 
                                 <div class="flex-1 flex flex-col justify-center min-w-0 pr-10"> 
-                                    <div :class="{'line-through text-gray-400': t.done}" class="truncate text-sm font-medium text-gray-700 dark:text-gray-200 leading-tight">
+                                    <div :class="{'line-through text-gray-400': isTaskDone(t, selectedDate)}" class="truncate text-sm font-medium text-gray-700 dark:text-gray-200 leading-tight">
                                         {{ t.text }}
                                     </div>
                                     
@@ -518,7 +547,7 @@
                                         @touchstart.stop 
                                         @touchend.stop 
                                         @mousedown.stop 
-                                        @click.stop="t.expanded = true" 
+                                        @click.stop="handleTaskClick(t)" 
                                         class="text-gray-300 hover:text-blue-600 p-1 font-bold text-sm" title="添加子步骤">
                                         
                                     </button>
@@ -567,115 +596,167 @@
             </div>
         </div>
 
-        <div v-if="currentTab === 'progress'" class="h-full p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900 space-y-4">
-            <div class="bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-800 dark:to-blue-700 p-5 rounded-2xl shadow-lg text-white">
-                <div class="flex justify-between items-end mb-2">
-                    <div class="opacity-80 text-sm">总完成工时</div>
-                    <div class="text-3xl font-bold font-mono">{{ progressStats.done }} <span class="text-sm font-normal">h</span></div>
+        <div v-if="currentTab === 'progress'" class="h-full p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900 space-y-4 pb-20">
+    
+    <div class="bg-gradient-to-br from-blue-600 to-blue-500 rounded-2xl p-4 text-white shadow-md shadow-blue-500/20">
+    <div class="flex justify-between items-center mb-2">
+        <div>
+            <p class="text-[9px] font-bold opacity-70 uppercase tracking-wider">总完成工时</p>
+            <h3 class="text-2xl font-black">{{ progressStats.done }} <span class="text-xs font-medium opacity-60 ml-0.5">h</span></h3>
+        </div>
+        <div class="text-right">
+            <p class="text-[9px] font-bold opacity-70 uppercase tracking-wider">完成率</p>
+            <p class="text-lg font-black">{{ progressStats.percent }}%</p>
+        </div>
+    </div>
+    
+    <div class="h-1.5 bg-white/20 rounded-full overflow-hidden">
+        <div class="h-full bg-white progress-bar" :style="{ width: progressStats.percent + '%' }"></div>
+    </div>
+    
+    <div class="flex justify-between items-center mt-2 opacity-60 text-[9px] font-medium">
+        <span>目标: {{ progressStats.total }}h</span>
+        <span>已记录 {{ tasks.length }} 项任务</span>
+    </div>
+</div>
+
+    <div class="space-y-3">
+        <div v-if="activeProgressTasks.length === 0" class="py-10 text-center text-gray-400 text-xs">
+            暂无包含工时的进行中任务
+        </div>
+        
+        <div v-for="task in activeProgressTasks" :key="task.id" 
+             @click="handleProgressItemClick(task)"
+             class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 active:scale-[0.98] transition-all">
+            
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1 min-w-0 pr-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-gray-800 dark:text-gray-200 truncate">{{ task.text }}</span>
+                        <span class="text-[9px] bg-gray-100 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded font-black">Q{{ task.q }}</span>
+                    </div>
                 </div>
-                <div class="w-full bg-black/20 rounded-full h-2 overflow-hidden">
-                    <div class="bg-white/90 h-2 rounded-full progress-bar" :style="{width: progressStats.percent + '%'}"></div>
+                <div class="text-right shrink-0">
+                    <span class="text-sm font-black text-blue-600 dark:text-blue-400">{{ task.accumulated || 0 }}</span>
+                    <span class="text-[10px] text-gray-400 font-medium ml-1">/ {{ task.duration }}h</span>
                 </div>
             </div>
-            <div v-for="task in progressTasks" :key="task.id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-3 overflow-hidden">
-                <div @click="handleProgressItemClick(task)" class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition select-none">
-                    <div class="flex-1">
-                         <div class="font-medium text-gray-800 dark:text-gray-200 flex items-center text-sm">
-                            <span :class="{'opacity-50 line-through': task.done}">{{ task.text }}</span>
-                            <span class="ml-2 text-[10px] text-gray-400 border dark:border-gray-600 px-1 rounded">Q{{ task.q }}</span>
-                        </div>
-                        <div class="mt-2 h-1.5 w-32 bg-red-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-blue-500 rounded-full" :style="{width: Math.min((task.accumulated||0)/task.duration*100, 100) + '%'}"></div>
-                        </div>
-                    </div>
-                    <div class="text-right pl-4">
-                        <div class="text-xs font-bold font-mono text-gray-700 dark:text-gray-300">
-                            {{ (task.accumulated || 0).toFixed(1) }} <span class="text-gray-400 font-normal">/ {{ task.duration }}h</span>
-                        </div>
+
+            <div class="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                     :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }">
+                </div>
+            </div>
+            
+            <div v-if="task.expanded" class="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700 animate-fade-in">
+                <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">最近专注记录</p>
+                <div v-if="task.log && task.log.length > 0" class="space-y-1.5">
+                    <div v-for="(entry, index) in task.log.slice(0, 3)" :key="index" class="flex justify-between text-[10px]">
+                        <span class="text-gray-500">{{ entry.date }}</span>
+                        <span class="font-mono text-blue-500">+{{ entry.duration.toFixed(1) }}h</span>
                     </div>
                 </div>
-                <div v-if="task.expanded" class="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 p-3 text-xs">
-                     <div v-if="!task.log || task.log.length === 0" class="text-center text-gray-400 py-2">暂无记录</div>
-                     <div v-else v-for="(log, idx) in task.log" :key="idx" class="flex justify-between bg-white dark:bg-gray-800 p-2 mb-1 rounded border border-gray-100 dark:border-gray-700">
-                        <span class="text-gray-500 dark:text-gray-400">{{ log.date }}</span>
-                        <span class="font-bold text-blue-600 dark:text-blue-400">+{{ log.duration.toFixed(2) }}h</span>
-                    </div>
+                <p v-else class="text-[10px] text-gray-400 italic">尚无专注记录</p>
+                <div class="mt-3 flex justify-center">
+                    <button @click.stop="editTaskProgress(task)" class="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">手动微调工时</button>
                 </div>
             </div>
         </div>
+    </div>
+
+    <div v-if="completedProgressTasks.length > 0" class="mt-6">
+        <button @click="showCompletedProgress = !showCompletedProgress" 
+                class="w-full py-2 flex items-center justify-center space-x-2 text-gray-400 hover:text-blue-500 transition-colors">
+            <div class="h-px flex-1 bg-gray-200 dark:bg-gray-800"></div>
+            <span class="text-[10px] font-bold tracking-widest uppercase">
+                {{ showCompletedProgress ? '隐藏已完成' : '查看 ' + completedProgressTasks.length + ' 项已完成' }}
+            </span>
+            <div class="h-px flex-1 bg-gray-200 dark:bg-gray-800"></div>
+        </button>
+
+        <div v-if="showCompletedProgress" class="mt-3 space-y-2 opacity-60">
+            <div v-for="task in completedProgressTasks" :key="task.id" 
+                class="bg-gray-50/50 dark:bg-gray-800/40 rounded-xl p-3 flex items-center justify-between border border-dashed border-gray-200 dark:border-gray-700">
+                <div class="flex items-center min-w-0">
+                    <div class="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center text-white text-[8px] mr-2">✓</div>
+                    <span class="line-through text-xs text-gray-500 truncate">{{ task.text }}</span>
+                </div>
+                <span class="text-[10px] font-mono text-gray-400">{{ (task.accumulated || 0).toFixed(1) }} / {{ task.duration }}h</span>
+            </div>
+        </div>
+    </div>
+</div>
 
         <div v-if="currentTab === 'countdown'" class="h-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
-            
-            <div class="shrink-0 flex justify-between items-center px-5 py-3 bg-gray-50 dark:bg-gray-900 z-20 border-b border-gray-100 dark:border-gray-800">
-                <div>
-                    <h2 class="text-xl font-bold text-gray-800 dark:text-white">重要时刻</h2>
-                </div>
+    
+    <div class="shrink-0 flex justify-between items-center px-5 py-4 bg-white dark:bg-gray-900 z-20 border-b border-gray-100 dark:border-gray-800">
+        <div>
+            <h2 class="text-xl font-bold text-gray-800 dark:text-white">重要时刻</h2>
+            <p class="text-[10px] text-gray-400 font-medium uppercase tracking-widest mt-0.5">Countdown Moments</p>
+        </div>
+        
+        <button @click="openCountdownModal('add')" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 active:scale-90 transition shadow-blue-200 dark:shadow-none">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 pt-2 pb-24">
+        
+        <div v-if="upcomingList.length > 0" class="space-y-3 mb-6">
+            <div v-for="day in upcomingList" :key="day.id" 
+                 @click="openCountdownModal('edit', day)"
+                 class="bg-white dark:bg-gray-800 rounded-2xl p-4 flex items-center shadow-sm border border-gray-100 dark:border-gray-700 active:scale-95 transition-all">
                 
-                <button @click="openCountdownModal('add')" class="bg-blue-600 text-white w-9 h-9 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 active:scale-90 transition shadow-blue-200 dark:shadow-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                </button>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <span class="font-bold text-gray-800 dark:text-white truncate">{{ day.name }}</span>
+                        <span v-if="day.isLunar" class="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">农</span>
+                    </div>
+                    <div class="text-[10px] text-gray-400 font-medium">目标日期: {{ day.date }} {{ getRepeatText(day.repeat) }}</div>
+                </div>
+
+                <div class="text-right pl-4 border-l border-gray-50 dark:border-gray-700 ml-2">
+                    <div class="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">
+                        {{ getDaysUntilData(day).days }}
+                    </div>
+                    <div class="text-[9px] font-black text-gray-300 dark:text-gray-500 mt-1 tracking-tighter">DAYS</div>
+                </div>
             </div>
+        </div>
 
-            <div class="flex-1 overflow-y-auto p-4 pt-2 pb-24">
-                <div v-for="(list, listType) in {upcoming: upcomingList, expired: expiredList}" :key="listType">
-                    
-                    <div v-if="list.length > 0" class="mb-6">
-                        <div class="flex items-center mb-2 px-1">
-                            <span class="text-xs font-bold px-2 py-0.5 rounded-full" 
-                                :class="{
-                                    'text-blue-500 bg-blue-50 dark:bg-blue-900/30': listType === 'pinned',
-                                    'text-gray-500 bg-gray-100 dark:bg-gray-800': listType === 'upcoming',
-                                    'text-gray-400 bg-gray-100 dark:bg-gray-800 line-through': listType === 'expired'
-                                }">
-                                {{ listType === 'pinned' ? '已置顶' : (listType === 'upcoming' ? '即将到来' : '已过期') }}
-                            </span>
-                            <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-2"></div>
-                        </div>
-                        
-                        <div class="space-y-3">
-                            <div v-for="day in list" :key="day.id" 
-                                 class="bg-white dark:bg-gray-800 rounded-xl shadow-sm flex items-stretch border-l-4 overflow-hidden relative select-none transition-transform active:scale-[0.98]" 
-                                 :class="[
-                                    day.color || (listType==='pinned'?'border-blue-500':'border-gray-400'),
-                                    listType === 'expired' ? 'opacity-60 grayscale' : '' 
-                                 ]">
-                                
-                                <div class="flex-1 flex flex-col justify-center p-3 pl-4">
-                                    <div class="font-bold text-gray-800 dark:text-gray-100 flex items-center" 
-                                         :class="{'line-through text-gray-400': listType === 'expired'}">
-                                        {{ day.name }}
-                                        <span v-if="day.isLunar" class="ml-2 text-[9px] bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-200 px-1 rounded-sm no-underline">农</span>
-                                    </div>
-                                    <div class="text-xs text-gray-400 mt-1 flex items-center">
-                                        <span>{{ day.date }}</span>
-                                        <span v-if="day.repeat && day.repeat !== 'none'" class="ml-2 bg-gray-100 dark:bg-gray-700 px-1 rounded text-[9px]">
-                                            {{ getRepeatText(day.repeat) }}
-                                        </span>
-                                    </div>
-                                    <div v-if="day.repeat !== 'none' || day.isLunar" class="text-[9px] text-blue-400 mt-0.5">
-                                        目标: {{ getDaysUntilData(day).targetDateStr }}
-                                    </div>
-                                </div>
+        <div v-else class="py-20 text-center opacity-20">
+            <div class="text-4xl mb-2">⏳</div>
+            <p class="text-sm">点击上方 + 号添加重要日子</p>
+        </div>
 
-                                <div class="flex flex-col justify-center items-end p-3 shrink-0 mr-1">
-                                    <div class="text-2xl font-bold leading-none" :class="getDaysUntilData(day).days >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">
-                                        {{ Math.abs(getDaysUntilData(day).days) }}
-                                    </div>
-                                    <div class="text-[10px] text-gray-400 mt-1">{{ getDaysUntilData(day).days >= 0 ? '天后' : '天前' }}</div>
-                                </div>
-                                
-                                <div class="flex font-medium text-sm shrink-0">
-                                    <button @click.stop="openCountdownModal('edit', day)" class="bg-gray-50 dark:bg-gray-700 text-blue-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">改</button>
-                                    <button @click.stop="deleteCountdown(day.id)" class="bg-gray-50 dark:bg-gray-700 text-red-500 w-12 flex items-center justify-center border-l border-gray-100 dark:border-gray-600">删</button>
-                                </div>
-                            </div>
-                        </div>
+        <div v-if="expiredList.length > 0" class="mt-4">
+            <button @click="showExpiredCountdown = !showExpiredCountdown" 
+                    class="w-full py-2 flex items-center justify-center space-x-2 text-gray-400 hover:text-blue-500 transition-colors">
+                <div class="h-px flex-1 bg-gray-200 dark:bg-gray-800"></div>
+                <span class="text-[10px] font-bold tracking-widest uppercase">
+                    {{ showExpiredCountdown ? '隐藏已过期' : '查看 ' + expiredList.length + ' 个历史时刻' }}
+                </span>
+                <div class="h-px flex-1 bg-gray-200 dark:bg-gray-800"></div>
+            </button>
+
+            <div v-if="showExpiredCountdown" class="mt-3 space-y-2 opacity-60 grayscale">
+                <div v-for="day in expiredList" :key="day.id" 
+                     @click="openCountdownModal('edit', day)"
+                     class="bg-white dark:bg-gray-800 rounded-xl p-3 flex items-center border-l-4 border-gray-300">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-gray-700 dark:text-gray-200 truncate">{{ day.name }}</div>
+                        <div class="text-[9px] text-gray-400">{{ day.date }}</div>
+                    </div>
+                    <div class="text-xs font-mono text-gray-400">
+                        已过去 {{ Math.abs(getDaysUntilData(day).days) }} 天
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
     </div>
 
     <div class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex justify-around items-center p-1 pb-safe z-30 text-[10px] select-none">
@@ -816,17 +897,27 @@
                         <input v-model="quadrantForm.duration" type="number" placeholder="0" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
                     </div>
 
-                    <div class="py-3 flex items-center justify-between space-x-2">
+                    <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between space-x-2">
                         <div class="flex-1">
                             <label class="block text-[10px] text-gray-400 mb-1">开始日期</label>
                             <input v-model="quadrantForm.startDate" type="date" class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white">
-                            
                         </div>
                         <span class="text-gray-300 pt-4">-</span>
                         <div class="flex-1">
                             <label class="block text-[10px] text-gray-400 mb-1">结束日期</label>
                             <input v-model="quadrantForm.endDate" type="date" class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white">
                         </div>
+                    </div>
+
+                    <div class="py-3 flex justify-between items-center">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">重复</span>
+                        <select v-model="quadrantForm.repeat" class="bg-transparent text-gray-500 dark:text-gray-300 text-sm outline-none dir-rtl appearance-none text-right pr-4 cursor-pointer">
+                            <option value="none">不重复</option>
+                            <option value="day">每天</option>
+                            <option value="week">每周</option>
+                            <option value="month">每月</option>
+                            <option value="year">每年</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -956,6 +1047,9 @@
 
             // --- 原有逻辑 ---
             const currentTab = ref('now');
+            const showCompletedInbox = ref(false); // 控制已完成列表的显示/隐藏
+            const showCompletedProgress = ref(false); // ✅ 新增：进度页折叠
+            const showExpiredCountdown = ref(false);  // ✅ 新增：倒数日折叠
             const showCalendar = ref(false);
             const newTask = ref('');
             const newDuration = ref(''); 
@@ -1060,7 +1154,20 @@
                 }
                 return days;
             });
+            // --- 新增：日期条下拉打开日历逻辑 ---
+            const headerTouchStartY = ref(0);
 
+            const handleHeaderTouchStart = (e) => {
+                headerTouchStartY.value = e.touches[0].clientY;
+            };
+
+            const handleHeaderTouchEnd = (e) => {
+                const deltaY = e.changedTouches[0].clientY - headerTouchStartY.value;
+                // 如果向下位移超过 40px，且日历当前是收起状态，则打开它
+                if (deltaY > 40 && !showCalendar.value) {
+                    showCalendar.value = true;
+                }
+            };
             // --- 新增：自动居中逻辑 ---
             const dateScrollContainer = ref(null);
             const { nextTick } = Vue; // 确保解构出了 nextTick
@@ -1100,14 +1207,14 @@
                     showCalendar.value = true;
                 }
 
-                // 2. ✅ 新增：如果是从“四象限”离开，自动收起所有展开的任务
-                if (oldTab === 'quadrant') {
+                // ✅ 修改 2：不论从“专注页”还是“四象限”离开，都自动收起所有任务
+                if (oldTab === 'now' || oldTab === 'quadrant') {
                     tasks.value.forEach(t => {
-                        if (t.q > 0) t.expanded = false; // 只收起四象限的任务
+                        t.expanded = false; 
                     });
                 }
                 
-                // 3. 额外优化：如果切回 [专注] 或 [四象限]，自动重置回今天 (保留你之前的逻辑)
+                // 3. 额外优化：如果切回 [专注] 或 [四象限]，自动重置回今天
                 if (newTab === 'now' || newTab === 'quadrant') {
                     jumpToToday(); 
                 }
@@ -1335,7 +1442,22 @@
                 closeQuadrantModal();
             };
 
-            const toggleTask = (task) => task.done = !task.done;
+            // ✅ 修改：支持重复任务的日期特定勾选
+            const toggleTask = (task) => {
+                if (task.repeat && task.repeat !== 'none') {
+                    const dateStr = formatDateKey(selectedDate.value);
+                    if (!task.completedDates) task.completedDates = [];
+                    
+                    const idx = task.completedDates.indexOf(dateStr);
+                    if (idx > -1) {
+                        task.completedDates.splice(idx, 1); // 取消完成
+                    } else {
+                        task.completedDates.push(dateStr);  // 标记完成
+                    }
+                } else {
+                    task.done = !task.done; // 普通任务维持原样
+                }
+            };
             const deleteTask = (id) => tasks.value = tasks.value.filter(t => t.id !== id);
 
             // 2. 定义【编辑任务】的表单
@@ -1434,12 +1556,19 @@
                 clearTimeout(pressTimer);
             };
 
-            // 2. 新增：专门处理点击展开，利用 Click 事件的天然延迟避免冲突
+            // ✅ 修改：实现手风琴效果，一次仅展开一个
             const handleTaskClick = (task) => {
-                // 如果是长按触发了编辑，或者正在滚动，则不展开
                 if (isLongPress || isScrolling) return;
                 
-                // 正常点击，执行展开/收起
+                // 如果当前任务准备展开（原本是收起状态）
+                if (!task.expanded) {
+                    // 遍历所有任务，把它们的展开状态全部设为 false
+                    tasks.value.forEach(t => {
+                        t.expanded = false;
+                    });
+                }
+                
+                // 切换当前任务的状态
                 task.expanded = !task.expanded;
             };
 
@@ -1482,46 +1611,42 @@
                 task.subtasks = task.subtasks.filter(s => s.id !== subId);
             };
 
-            // --- 核心分类 (修改版：增加优先级排序) ---
+            
+                
+            
+            // ✅ 修改：拆分进行中和已完成任务
+            const activeInboxTasks = computed(() => {
+                const key = formatDateKey(selectedDate.value);
+                return tasks.value.filter(t => t.q === 0 && t.date === key && !isTaskDone(t, selectedDate.value));
+            });
+
+            const completedInboxTasks = computed(() => {
+                const key = formatDateKey(selectedDate.value);
+                return tasks.value.filter(t => t.q === 0 && t.date === key && isTaskDone(t, selectedDate.value));
+            });
+
+            // --- 约 1220 行，在 completedInboxTasks 之后插入 ---
+
+            // ✅ 找回丢失的逻辑：专注页下方小区域的四象限任务筛选
             const activeQuadrantTasks = computed(() => {
                 const sel = new Date(selectedDate.value);
-                sel.setHours(0,0,0,0);
+                sel.setHours(0, 0, 0, 0);
                 const selTime = sel.getTime();
 
                 return tasks.value.filter(t => {
-                    // 1. 基础筛选：必须是四象限任务且未完成
-                    if (t.q <= 0 || t.done) return false;
+                    // 1. 基础筛选：必须是四象限任务 (q > 0) 且今天还没打卡
+                    if (t.q <= 0 || isTaskDone(t, selectedDate.value)) return false;
 
-                    // 2. 日期筛选：如果设置了“开始日期”，还没到日子就不显示
+                    // 2. 日期筛选：如果设了日期，没到日子的不显示（带3天预显示缓冲）
                     if (t.startDate) {
                         const s = new Date(t.startDate);
-                        s.setHours(0,0,0,0);
-                        if (selTime < s.getTime()) return false;
+                        s.setHours(0, 0, 0, 0);
+                        const buffer = 3 * 24 * 60 * 60 * 1000; 
+                        if (selTime < (s.getTime() - buffer)) return false;
                     }
                     return true;
-                }).sort((a, b) => {
-                    // 排序逻辑：
-                    // 1. 象限优先 (1 > 2 > 3 > 4)
-                    if (a.q !== b.q) return a.q - b.q;
-                    
-                    // 2. 同象限下，【带时间阶段】的优先
-                    const aHasDate = !!(a.startDate || a.endDate);
-                    const bHasDate = !!(b.startDate || b.endDate);
-                    
-                    if (aHasDate && !bHasDate) return -1; // a 有日期，a 排前
-                    if (!aHasDate && bHasDate) return 1;  // b 有日期，b 排前
-                    
-                    return 0; // 都有或都没有，保持原序
-                });
+                }).sort((a, b) => a.q - b.q); // 按象限优先级 1-2-3-4 排序
             });
-                
-            
-            const inboxTasks = computed(() => {
-                const key = formatDateKey(selectedDate.value);
-                return tasks.value.filter(t => t.q === 0 && t.date === key)
-                .sort((a, b) => (a.done === b.done) ? 0 : a.done ? 1 : -1);
-            });
-
             // --- 核心分类逻辑升级 ---
             
             // 辅助：获取天数
@@ -1550,6 +1675,10 @@
             );
 
             const progressTasks = computed(() => tasks.value.filter(t => t.duration > 0));
+            // 进行中的进度任务
+            const activeProgressTasks = computed(() => progressTasks.value.filter(t => !isTaskDone(t, selectedDate.value)));
+            // 已完成的进度任务
+            const completedProgressTasks = computed(() => progressTasks.value.filter(t => isTaskDone(t, selectedDate.value)));
             const progressStats = computed(() => {
                 const list = progressTasks.value;
                 if (list.length === 0) return { total: 0, done: 0, percent: 0 };
@@ -1713,6 +1842,14 @@
                 const highlightList = ['春节', '端午', '中秋', '元旦', '清明', '国庆', '立春', '雨水', '惊蛰', '春分'];
                 if (highlightList.some(f => day.lunarText.includes(f))) return 'text-red-500 dark:text-red-400 font-bold';
                 return 'text-gray-600 dark:text-gray-400';
+            };
+            // ✅ 新增：判断任务在特定日期是否完成
+            const isTaskDone = (task, date) => {
+                if (task.repeat && task.repeat !== 'none') {
+                    const dateStr = formatDateKey(date);
+                    return task.completedDates && task.completedDates.includes(dateStr);
+                }
+                return task.done;
             };
             const hasTask = (date) => { const key = formatDateKey(date); return tasks.value.some(t => t.date === key && !t.done); };
             // --- 核心升级：支持农历和重复周期的计算 ---
@@ -1911,19 +2048,30 @@
                 }
             };
 
+            // --- 从第 1375 行开始完全替换至结尾 ---
             return {
+                // ... 你原有的其他变量 ...
                 isDark, toggleTheme,
                 currentTab, showCalendar, toggleCalendar: () => showCalendar.value = !showCalendar.value,
-                stripDays, dateScrollContainer, touchStart, touchEnd,
+                stripDays, handleHeaderTouchStart,handleHeaderTouchEnd,
+                dateScrollContainer, touchStart, touchEnd,
                 isFocusing, newTask, newDuration, 
-                activeQuadrantTasks, inboxTasks, 
-                homeUpcomingList,  upcomingList, expiredList,
+                tasks, // ✨ 关键修复：把这个补上，进度页就不报错了
+                showCompletedInbox, 
+                showCompletedProgress, 
+                showExpiredCountdown,
+                activeProgressTasks,
+                completedProgressTasks,
+                activeInboxTasks,   
+                completedInboxTasks,
+                activeQuadrantTasks, 
+                homeUpcomingList, upcomingList, expiredList,
                 quadrantTitles, progressStats, progressTasks, 
                 currentYear, currentMonth, lunarMonthStr, daysInMonth, firstDayOfWeek,
                 selectedDate, changeMonth, jumpToToday, selectDate, getDayClass, isSameDate,
                 getLunarClass,
                 defaultDuration, timeLeft, formatTime, startTimer, stopTimer,
-                todayPomodoros, addTask, toggleTask, deleteTask, addQuickTask,
+                todayPomodoros, addTask, isTaskDone, toggleTask, deleteTask, addQuickTask,
                 showQuadrantModal, quadrantForm, closeQuadrantModal, saveQuadrantTask,
                 getTasksByQ, hasTask,
                 getDaysUntilData, 
@@ -1931,21 +2079,19 @@
                 deleteCountdown, 
                 showTimeSelect, showTimerAction, handleTimerClick, setDuration, closeTimerMenus,
                 showCountdownModal, countdownForm, openCountdownModal, closeCountdownModal, saveCountdown, countdownFormMode,
-                startPress, cancelPress, currentFocusTask, // handleAppClick 已删除
+                startPress, cancelPress, currentFocusTask,
                 editingTask, openEditModal, closeEditModal, deleteCurrentTask, editForm, saveEditTask,
                 showSyncModal, githubToken, gistId, handleSync, syncStatus,
-                // 下面这一行之前少了个逗号，现在补上了
                 handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask, handleBackgroundClick,
                 showProgressModal, 
                 progressForm, 
                 progressInputRef, 
                 saveTaskProgress,
-                handleTileClick, editTaskProgress,handleProgressItemClick,
+                handleTileClick, editTaskProgress, handleProgressItemClick
             };
         }
     }).mount('#app');
 </script>
 </body>
 </html>
-
 
