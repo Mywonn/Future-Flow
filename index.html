@@ -277,7 +277,7 @@
                 <div class="w-px bg-blue-500/30 mx-2"></div>
 
                 <div class="flex flex-col items-center justify-center">
-                    <div class="text-4xl font-bold leading-none">{{ todayPomodoros }}</div>
+                    <div class="text-4xl font-bold leading-none">{{ dailyDoneCount }}</div>
                     <div class="text-[10px] opacity-60 mt-1">今日成就</div>
                 </div>
             </div>
@@ -339,8 +339,6 @@
                         今日专注
                     </div>
                     <input v-model="newTask" @keyup.enter="addTask" 
-                    @touchstart.stop 
-                    @touchend.stop
                     @click.stop
                     type="text" placeholder="添加待办..." class="bg-transparent flex-1 px-3 py-1 outline-none text-sm min-w-0 dark:text-white dark:placeholder-gray-500 font-medium text-gray-700 placeholder-gray-400">
                     
@@ -359,8 +357,71 @@
 
             <div class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
                 <div class="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-    
-                    <div v-if="activeInboxTasks.length === 0" class="text-center py-10 opacity-30 text-gray-500 dark:text-gray-400">
+                    <div v-for="task in activeRecurringQuadrantTasks" :key="task.id" 
+                        class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm mb-2.5 overflow-hidden transition-all duration-300 ring-1 ring-gray-100/50 dark:ring-white/5 hover:shadow-md relative group">
+                        
+                        <div class="absolute top-0 right-16 text-[56px] font-black opacity-10 select-none z-10"
+                             :class="{'text-red-500': task.q===1, 'text-blue-500': task.q===2, 'text-yellow-500': task.q===3}">
+                            Q{{ task.q }}
+                        </div>
+
+                        <div class="p-3 flex items-center cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
+                            @touchstart="handleTouchStart(task, $event)"
+                            @touchmove="handleTouchMove($event)"
+                            @touchend="handleTouchEnd(task)" 
+                            @click="handleTaskClick(task)">
+                            
+                            <button @touchstart.stop @touchend.stop @click.stop="toggleTask(task)" class="mr-3 shrink-0 p-1 -ml-1 opacity-80">
+                                <div class="w-5 h-5 border-2 border-gray-300 text-gray-300 rounded-full transition-all duration-300 hover:border-blue-600 hover:text-blue-600">
+                                </div>
+                            </button>
+
+                            <div class="flex-1 min-w-0 pr-4"> <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block leading-relaxed">
+                                    {{ task.text }}
+                                </span>
+                                <div v-if="task.duration > 0" class="mt-1 h-1 w-24 bg-red-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-blue-500 rounded-full" :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }"></div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 ml-2">
+                                <button @touchstart.stop @touchend.stop @click.stop="startTimer(task)" class="text-gray-300 hover:text-blue-600 p-1 transition-colors">▶</button>
+                                <div class="text-gray-300 transition-transform duration-300 text-xs px-1" :class="{'rotate-180': task.expanded}">▼</div>
+                            </div>
+                        </div>
+
+                        <div v-if="task.expanded" class="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 px-3 py-2 animate-fade-in">
+                            <div v-if="task.subtasks && task.subtasks.length > 0" class="space-y-1 mb-2">
+                                <div v-for="sub in task.subtasks" :key="sub.id" class="flex items-start group/sub">
+                                    <button @click.stop="toggleSubtask(sub)" class="mr-2 mt-0.5 text-gray-400 hover:text-blue-500 shrink-0">
+                                        <div v-if="sub.done" class="text-blue-500 text-xs">☑</div>
+                                        <div v-else class="w-3 h-3 border border-current rounded-sm"></div>
+                                    </button>
+                                    <div class="flex-1 flex items-center min-w-0">
+                                        <input v-if="sub.editing" 
+                                            v-model="sub.text" 
+                                            @blur="sub.editing = false" 
+                                            @keyup.enter="$event.target.blur()"
+                                            v-focus
+                                            class="w-full bg-transparent border-none outline-none text-xs text-blue-600 dark:text-blue-400 font-medium py-0 px-0 m-0 leading-tight">
+                                        
+                                        <span v-else 
+                                            @dblclick="editSubtask(sub)" 
+                                            :class="{'line-through text-gray-400': sub.done}" 
+                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text">
+                                            {{ sub.text }}
+                                        </span>
+                                    </div>
+                                    <button @click.stop="deleteSubtask(task, sub.id)" class="text-gray-300 hover:text-red-400 ml-1 px-1 text-[10px]">×</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center bg-white dark:bg-gray-800 rounded px-2 py-1 border border-gray-100 dark:border-gray-600">
+                                <span class="text-gray-400 text-xs mr-2">↳</span>
+                                <input type="text" placeholder="添加步骤..." class="flex-1 bg-transparent text-xs outline-none text-gray-600 dark:text-gray-300 placeholder-gray-400" @click.stop @keyup.enter="addSubtask(task, $event)" @blur="addSubtask(task, $event)">
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="activeInboxTasks.length === 0 && activeRecurringQuadrantTasks.length === 0" class="text-center py-10 opacity-30 text-gray-500 dark:text-gray-400">
                         <p class="text-xs">暂无进行中的任务</p>
                     </div>
 
@@ -404,7 +465,21 @@
                                         <div v-if="sub.done" class="text-blue-500 text-xs">☑</div>
                                         <div v-else class="w-3 h-3 border border-current rounded-sm"></div>
                                     </button>
-                                    <span :class="{'line-through text-gray-400': sub.done}" class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5">{{ sub.text }}</span>
+                                    <div class="flex-1 flex items-center min-w-0">
+                                        <input v-if="sub.editing" 
+                                            v-model="sub.text" 
+                                            @blur="sub.editing = false" 
+                                            @keyup.enter="$event.target.blur()"
+                                            v-focus
+                                            class="w-full bg-transparent border-none outline-none text-xs text-blue-600 dark:text-blue-400 font-medium py-0 px-0 m-0 leading-tight">
+                                        
+                                        <span v-else 
+                                            @dblclick="editSubtask(sub)" 
+                                            :class="{'line-through text-gray-400': sub.done}" 
+                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text">
+                                            {{ sub.text }}
+                                        </span>
+                                    </div>
                                     <button @click.stop="deleteSubtask(task, sub.id)" class="text-gray-300 hover:text-red-400 ml-1 px-1 text-[10px]">×</button>
                                 </div>
                             </div>
@@ -435,6 +510,7 @@
                             </div>
                         </div>
                     </div>
+                    
                 </div>
             </div>
 
@@ -497,18 +573,17 @@
                         <div v-if="homeUpcomingList.length === 0" class="w-full text-xs text-gray-300 text-center py-6">无近期事项</div>
                         
                         <div v-for="day in homeUpcomingList" :key="day.id" 
-                            class="inline-flex flex-col justify-between shrink-0 w-[43%] h-full bg-blue-50/60 dark:bg-gray-800 rounded-2xl px-2 py-2.5 relative overflow-hidden active:scale-95 transition-transform border border-gray-100 dark:border-gray-800/50">
+                            class="inline-flex flex-col shrink-0 w-[43%] h-full bg-blue-50/60 dark:bg-gray-800 rounded-2xl px-2 py-2.5 relative overflow-hidden active:scale-95 transition-transform border border-gray-100 dark:border-gray-800/50">
                             
                             <div class="absolute -right-2 -bottom-2 text-5xl opacity-[0.03] select-none pointer-events-none rotate-12">⏳</div>
 
-                            <div class="flex justify-between items-start mb-0.5">
-                                <div class="marquee-box flex-1 mr-0.5">
+                            <div class="mb-0.5 w-full">
+                                <div class="marquee-box w-full">
                                     <span class="text-xs font-bold text-gray-700 dark:text-gray-200"
                                         :class="{'animate-marquee': day.name.length > 4}">
                                         {{ day.name }}
                                     </span>
                                 </div>
-                                <span v-if="day.isLunar" class="shrink-0 text-[8px] bg-red-100 text-red-600 px-0.5 rounded font-bold scale-90">农</span>
                             </div>
                             
                             <div class="flex items-baseline space-x-0.5 my-auto">
@@ -518,8 +593,12 @@
                                 <span class="text-[10px] font-bold text-blue-300/80">天后</span>
                             </div>
                             
-                            <div class="text-[9px] font-bold text-gray-400/60 truncate mt-auto">
-                                {{ day.date.slice(5) }}
+                            <div class="mt-auto flex items-center overflow-hidden">
+                                <span class="text-[9px] font-bold text-gray-400/60 leading-none truncate">
+                                    {{ day.date.slice(5) }}
+                                </span>
+                                
+                                <span v-if="day.isLunar" class="ml-1 text-[8px] bg-red-100 text-red-600 px-1 py-[1px] rounded-[3px] font-bold leading-none shrink-0">农</span>
                             </div>
                         </div>
                     </div>
@@ -600,15 +679,27 @@
                             <div v-if="t.expanded" class="bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700 px-3 py-2 animate-fade-in">
                                 <div v-if="t.subtasks && t.subtasks.length > 0" class="space-y-1 mb-2">
                                     <div v-for="sub in t.subtasks" :key="sub.id" class="flex items-start group/sub">
-                                        <button @click="toggleSubtask(sub)" class="mr-2 mt-0.5 text-gray-400 hover:text-blue-500 shrink-0">
-                                            <div v-if="sub.done" class="text-blue-500 text-xs">☑</div>
-                                            <div v-else class="w-3 h-3 border border-current rounded-sm"></div>
-                                        </button>
-                                        <span :class="{'line-through text-gray-400': sub.done}" class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5">
+                                    <button @click="toggleSubtask(sub)" class="mr-2 mt-0.5 text-gray-400 hover:text-blue-500 shrink-0">
+                                        <div v-if="sub.done" class="text-blue-500 text-xs">☑</div>
+                                        <div v-else class="w-3 h-3 border border-current rounded-sm"></div>
+                                    </button>
+                                    <div class="flex-1 flex items-center min-w-0">
+                                        <input v-if="sub.editing" 
+                                            v-model="sub.text" 
+                                            @blur="sub.editing = false" 
+                                            @keyup.enter="$event.target.blur()"
+                                            v-focus
+                                            class="w-full bg-transparent border-none outline-none text-xs text-blue-600 dark:text-blue-400 font-medium py-0 px-0 m-0 leading-tight">
+                                        
+                                        <span v-else 
+                                            @dblclick="editSubtask(sub)" 
+                                            :class="{'line-through text-gray-400': sub.done}" 
+                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text">
                                             {{ sub.text }}
                                         </span>
-                                        <button @click="deleteSubtask(t, sub.id)" class="text-gray-300 hover:text-red-400 ml-1 px-1 text-[10px]">×</button>
                                     </div>
+                                    <button @click="deleteSubtask(t, sub.id)" class="text-gray-300 hover:text-red-400 ml-1 px-1 text-[10px]">×</button>
+                                </div>
                                 </div>
                                 <div class="flex items-center bg-white dark:bg-gray-800 rounded px-2 py-1 border border-gray-100 dark:border-gray-600">
                                     <span class="text-gray-400 text-xs mr-2">↳</span>
@@ -1051,9 +1142,9 @@
     </div>
 </div>
 <script>
-    const { createApp, ref, computed, watch, onMounted, reactive } = Vue;
+   const { createApp, ref, computed, watch, onMounted, reactive, nextTick } = Vue; // 确保解构了 nextTick
 
-    createApp({
+    const app = createApp({ // 将 createApp 改为赋值给变量
         setup() {
             // --- 3. 夜间模式逻辑 ---
             const isDark = ref(false);
@@ -1182,7 +1273,6 @@
             const showTimeSelect = ref(false);
             const showTimerAction = ref(false);
             const currentFocusTask = ref(null);
-            const todayPomodoros = ref(0);
             let timerInterval = null;
             
             const editingTask = ref(null);
@@ -1259,6 +1349,8 @@
 
             // --- 监听Tab切换 ---
             watch(currentTab, (newTab, oldTab) => {
+                // ✅ 新增：切换 Tab 时，强制关闭所有倒数日的“左滑删除”状态
+                swipeItemId.value = null;
                 // 1. 日历显示逻辑
                 if (newTab === 'now' || newTab === 'quadrant') {
                     showCalendar.value = false;
@@ -1289,9 +1381,6 @@
                 const savedCountdowns = localStorage.getItem('mike-pro-countdowns-v4');
                 if (savedCountdowns) countdowns.value = JSON.parse(savedCountdowns);
 
-                const savedPoms = localStorage.getItem('mike-pro-poms-v4');
-                todayPomodoros.value = savedPoms ? parseInt(savedPoms) : 0;
-
                 // 读取同步设置
                 const savedToken = localStorage.getItem('mike_github_token');
                 if(savedToken) githubToken.value = savedToken;
@@ -1305,10 +1394,10 @@
             });
 
             // 自动保存本地数据
-            watch([tasks, countdowns, todayPomodoros], () => {
+            // 自动保存本地数据
+            watch([tasks, countdowns], () => { // <--- 删掉了 todayPomodoros
                 localStorage.setItem('mike-pro-tasks-v4', JSON.stringify(tasks.value));
                 localStorage.setItem('mike-pro-countdowns-v4', JSON.stringify(countdowns.value));
-                localStorage.setItem('mike-pro-poms-v4', todayPomodoros.value);
             }, { deep: true });
 
             // 自动保存同步配置
@@ -1318,90 +1407,89 @@
             });
 
             // --- 云同步逻辑 (Gist) ---
-            const handleSync = async (direction) => {
-                if (!githubToken.value) {
-                    alert("请先填写 GitHub Token");
-                    return;
-                }
-                syncStatus.value = 'loading';
-                
-                const fileName = 'mikes_flow_data.json';
-                const content = JSON.stringify({
-                    tasks: tasks.value,
-                    countdowns: countdowns.value,
-                    todayPomodoros: todayPomodoros.value,
-                    updatedAt: new Date().toISOString()
-                });
+            // --- 修复后的完整同步函数 ---
+const handleSync = async (direction) => {
+    if (!githubToken.value) {
+        alert("请先填写 GitHub Token");
+        return;
+    }
+    syncStatus.value = 'loading';
+    
+    const fileName = 'mikes_flow_data.json';
+    
+    // 准备要上传的数据 (已移除 todayPomodoros)
+    const content = JSON.stringify({
+        tasks: tasks.value,
+        countdowns: countdowns.value,
+        updatedAt: new Date().toISOString()
+    });
 
-                try {
-                    // 1. UPLOAD (创建或更新)
-                    if (direction === 'upload') {
-                        let url = 'https://api.github.com/gists';
-                        let method = 'POST';
-                        
-                        // 如果有ID，则是更新 (PATCH)
-                        if (gistId.value) {
-                            url += `/${gistId.value}`;
-                            method = 'PATCH';
-                        }
+    try {
+        // === 1. 上传 (UPLOAD) 逻辑 ===
+        if (direction === 'upload') {
+            const method = gistId.value ? 'PATCH' : 'POST';
+            const url = gistId.value 
+                ? `https://api.github.com/gists/${gistId.value}` 
+                : 'https://api.github.com/gists';
 
-                        const res = await fetch(url, {
-                            method: method,
-                            headers: {
-                                'Authorization': `token ${githubToken.value}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                description: "Mike's Flow Data Sync",
-                                public: false,
-                                files: {
-                                    [fileName]: { content: content }
-                                }
-                            })
-                        });
-
-                        if (!res.ok) throw new Error('上传失败，请检查Token权限');
-                        const data = await res.json();
-                        
-                        // 保存生成的 Gist ID
-                        if (!gistId.value) gistId.value = data.id;
-                        alert('✅ 上传成功！数据已同步到云端。');
-                    } 
-                    // 2. DOWNLOAD (获取)
-                    else {
-                        if (!gistId.value) {
-                            alert("请先提供 Gist ID (或者在另一台设备先上传)");
-                            syncStatus.value = 'error';
-                            return;
-                        }
-                        const res = await fetch(`https://api.github.com/gists/${gistId.value}`, {
-                            headers: { 'Authorization': `token ${githubToken.value}` }
-                        });
-                        
-                        if (!res.ok) throw new Error('下载失败，ID可能错误');
-                        const data = await res.json();
-                        const file = data.files[fileName];
-                        
-                        if (file && file.content) {
-                            const cloudData = JSON.parse(file.content);
-                            if(confirm(`云端数据更新于: ${cloudData.updatedAt}\n确定覆盖本地数据吗？`)) {
-                                tasks.value = cloudData.tasks || [];
-                                countdowns.value = cloudData.countdowns || [];
-                                todayPomodoros.value = cloudData.todayPomodoros || 0;
-                                alert('✅ 下载成功！本地数据已更新。');
-                            }
-                        }
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Authorization': `token ${githubToken.value}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    description: "Future Flow Data Sync",
+                    public: false, // 私有 Gist
+                    files: {
+                        [fileName]: { content: content }
                     }
-                    syncStatus.value = 'success';
-                    setTimeout(() => syncStatus.value = 'idle', 3000);
+                })
+            });
 
-                } catch (e) {
-                    console.error(e);
-                    alert(`同步出错: ${e.message}`);
-                    syncStatus.value = 'error';
+            if (!res.ok) throw new Error('上传失败');
+            const data = await res.json();
+            
+            // 如果是新建的，自动保存 Gist ID
+            if (!gistId.value) gistId.value = data.id;
+            
+            alert('✅ 上传成功！');
+        } 
+        
+        // === 2. 下载 (DOWNLOAD) 逻辑 ===
+        else {
+            if (!gistId.value) {
+                alert("请先提供 Gist ID");
+                syncStatus.value = 'error';
+                return;
+            }
+            const res = await fetch(`https://api.github.com/gists/${gistId.value}`, {
+                headers: { 'Authorization': `token ${githubToken.value}` }
+            });
+            
+            if (!res.ok) throw new Error('下载失败');
+            const data = await res.json();
+            const file = data.files[fileName];
+            
+            if (file && file.content) {
+                const cloudData = JSON.parse(file.content);
+                if(confirm(`云端更新于: ${cloudData.updatedAt}\n确定覆盖吗？`)) {
+                    tasks.value = cloudData.tasks || [];
+                    countdowns.value = cloudData.countdowns || [];
+                    alert('✅ 下载成功！');
                 }
-            };
+            }
+        }
+        
+        syncStatus.value = 'success';
+        setTimeout(() => syncStatus.value = 'idle', 3000);
 
+    } catch (e) {
+        console.error(e);
+        alert(`同步出错: ${e.message}`);
+        syncStatus.value = 'error';
+    }
+};
             // --- 任务管理 ---
             const formatDateKey = (date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
             
@@ -1445,6 +1533,27 @@
                 newTask.value = ''; newDuration.value = '';
             };
 
+            // --- 新增：自动计算今日已完成的任务数量 ---
+            const dailyDoneCount = computed(() => {
+                const key = formatDateKey(selectedDate.value);
+                
+                // 遍历所有任务，统计已完成的
+                return tasks.value.reduce((count, t) => {
+                    // 1. 核心判断：这个任务在“选中的这天”是完成状态吗？
+                    // (isTaskDone 函数已经完美处理了普通任务和重复任务的区别)
+                    if (!isTaskDone(t, selectedDate.value)) return count;
+
+                    // 2. 归属判断：
+                    // 如果是 Inbox (Q0) 任务，必须日期也匹配才算
+                    if (t.q === 0) {
+                        return t.date === key ? count + 1 : count;
+                    }
+                    
+                    // 如果是 四象限 (Q1-4) 任务，只要完成了就算
+                    // (重复任务通过 isTaskDone 判断，一次性任务完成了就算总成就)
+                    return count + 1;
+                }, 0);
+            });
             // --- 修复开始：完整的任务添加与编辑逻辑 ---
 
             // 1. 定义【新建任务】的弹窗状态和表单
@@ -1670,8 +1779,12 @@
                 task.subtasks = task.subtasks.filter(s => s.id !== subId);
             };
 
-            
-                
+            const editSubtask = (sub) => {
+                sub.editing = true; // 开启编辑状态
+                // 自动聚焦需要等 DOM 更新，这里可以用一个小技巧在 HTML 处理
+            };
+            // ⬆️⬆️⬆️ 新增结束 ⬆️⬆️⬆️
+                            
             
             // ✅ 修改：拆分进行中和已完成任务
             const activeInboxTasks = computed(() => {
@@ -1683,6 +1796,40 @@
                 const key = formatDateKey(selectedDate.value);
                 return tasks.value.filter(t => t.q === 0 && t.date === key && isTaskDone(t, selectedDate.value));
             });
+
+            // ⬇️⬇️⬇️ 新增代码开始：筛选 Q1-Q3 的重复任务 ⬇️⬇️⬇️
+            const activeRecurringQuadrantTasks = computed(() => {
+                // 必须基于选中的日期（通常是今天）
+                const sel = new Date(selectedDate.value); 
+                sel.setHours(0, 0, 0, 0);
+                const selTime = sel.getTime();
+
+                return tasks.value.filter(t => {
+                    // 1. 必须是 Q1, Q2, Q3 (排除 Q0 和 Q4)
+                    if (![1, 2, 3].includes(t.q)) return false;
+                    
+                    // 2. 必须是重复任务 (repeat !== 'none')
+                    if (!t.repeat || t.repeat === 'none') return false;
+
+                    // 3. 必须是“今日未完成” (利用现有的 isTaskDone 逻辑)
+                    if (isTaskDone(t, selectedDate.value)) return false;
+
+                    // 4. 日期范围检查 (确保任务已开始且未结束)
+                    if (t.startDate) {
+                        const s = new Date(t.startDate);
+                        s.setHours(0, 0, 0, 0);
+                        if (selTime < s.getTime()) return false; // 还没到开始日期
+                    }
+                    if (t.endDate) {
+                        const e = new Date(t.endDate);
+                        e.setHours(0, 0, 0, 0);
+                        if (selTime > e.getTime()) return false; // 已经过期
+                    }
+
+                    return true;
+                }).sort((a, b) => a.q - b.q); // 按优先级 1->2->3 排序
+            });
+            // ⬆️⬆️⬆️ 新增代码结束 ⬆️⬆️⬆️
 
             // --- 约 1220 行，在 completedInboxTasks 之后插入 ---
 
@@ -1827,7 +1974,6 @@
                 timeLeft.value = defaultDuration.value * 60;
 
                 if (save && currentFocusTask.value) {
-                    todayPomodoros.value++;
                     const added = defaultDuration.value / 60;
                     const t = currentFocusTask.value;
                     if(!t.accumulated) t.accumulated = 0; 
@@ -2154,6 +2300,7 @@
                 completedProgressTasks,
                 activeInboxTasks,   
                 completedInboxTasks,
+                activeRecurringQuadrantTasks,
                 activeQuadrantTasks, 
                 homeUpcomingList, upcomingList, expiredList,
                 quadrantTitles, progressStats, progressTasks, 
@@ -2161,7 +2308,7 @@
                 selectedDate, changeMonth, jumpToToday, selectDate, getDayClass, isSameDate,
                 getLunarClass,
                 defaultDuration, timeLeft, formatTime, startTimer, stopTimer,
-                todayPomodoros, addTask, isTaskDone, toggleTask, deleteTask, addQuickTask,
+                dailyDoneCount, addTask, isTaskDone, toggleTask, deleteTask, addQuickTask,
                 showQuadrantModal, quadrantForm, closeQuadrantModal, saveQuadrantTask,
                 getTasksByQ, hasTask,
                 getDaysUntilData, 
@@ -2172,7 +2319,7 @@
                 startPress, cancelPress, currentFocusTask,
                 editingTask, openEditModal, closeEditModal, deleteCurrentTask, editForm, saveEditTask,
                 showSyncModal, githubToken, gistId, handleSync, syncStatus,
-                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask, handleBackgroundClick,
+                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask, editSubtask,handleBackgroundClick,
                 showProgressModal, 
                 progressForm, 
                 progressInputRef, 
@@ -2185,10 +2332,30 @@
                 handleSwipeEnd,
                 handleTileClick, editTaskProgress, handleProgressItemClick
                 
-            };
+
+            }; // 结束 return
+        } // 结束 setup
+    }); // 结束 createApp 定义
+
+    app.directive('focus', {
+        mounted(el) {
+            // 1. 立即获取焦点，唤起键盘
+            el.focus();
+            
+            // 2. 设置一个延迟（给键盘弹起留出动画时间，通常 300ms 足够）
+            setTimeout(() => {
+                // 3. 强制将该元素滚动到屏幕垂直方向的“正中间”
+                // scrollIntoView 是浏览器原生 API，能自动处理各种遮挡情况
+                el.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center', 
+                    inline: 'nearest' 
+                });
+            }, 500);
         }
-    }).mount('#app');
+    });
+
+    app.mount('#app');
 </script>
 </body>
 </html>
-
