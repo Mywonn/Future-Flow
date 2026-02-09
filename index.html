@@ -104,6 +104,8 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+            /* ✅ 新增：禁用双击缩放手势，但保留滑动 */
+            touch-action: manipulation;
         }
 
         /* --- 修复 iOS PWA 输入框无法聚焦的问题 --- */
@@ -121,8 +123,7 @@
      @click="handleBackgroundClick"
      v-cloak>
 
-
-<div v-else class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700 safe-top">
+<div class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700 safe-top">
         
         <div class="flex flex-col w-full">
             <div class="px-4 pt-3 pb-1 flex justify-between items-center relative">
@@ -214,11 +215,11 @@
             </div>
 
             <div v-if="showCalendar || ['progress', 'countdown'].includes(currentTab)" 
-                 class="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 p-4 animate-fade-in border-t border-gray-100 dark:border-gray-700 transition-all"
+                 class="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 p-4 py-1.5 animate-fade-in border-t border-gray-100 dark:border-gray-700 transition-all"
                  :class="['now', 'quadrant'].includes(currentTab) ? 'absolute top-full left-0 w-full shadow-[0_100vh_0_100vh_rgba(0,0,0,0.5)] z-50 rounded-b-2xl' : 'relative w-full shadow-sm z-10'"
                  @touchstart="touchStart" @touchend="touchEnd">
                  
-                 <div class="flex justify-between items-center mb-4">
+                 <div class="flex justify-between items-center mb-1">
                     <button @click.stop="changeMonth(-1)" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">◀</button>
                     <div class="text-center" @click="jumpToToday">
                         <div class="font-bold text-lg">{{ currentYear }}年 {{ currentMonth + 1 }}月</div>
@@ -226,17 +227,19 @@
                     </div>
                     <button @click.stop="changeMonth(1)" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">▶</button>
                 </div>
-                 <div class="grid grid-cols-7 text-center text-xs text-gray-400 mb-2">
+                 <div class="grid grid-cols-7 text-center text-sm text-gray-400 mb-0.5">
                     <span v-for="w in ['日','一','二','三','四','五','六']">{{ w }}</span>
                 </div>
-                <div class="grid grid-cols-7 gap-1 text-center text-sm mb-2">
+                <div class="grid grid-cols-7 gap-x-1 gap-y- -2 text-center text-lg mb-0">
                     <div v-for="n in firstDayOfWeek"></div>
                     <div v-for="day in daysInMonth" @click="selectDate(day)" 
-                            class="h-10 flex flex-col items-center justify-center rounded-lg cursor-pointer relative transition-all" 
+                            class="h-9 flex flex-col items-center justify-center rounded-lg cursor-pointer relative transition-all" 
                             :class="getDayClass(day)">
-                        <span>{{ day.dayNum }}</span>
-                        <span class="text-[9px] scale-75" :class="getLunarClass(day)">{{ day.lunarText }}</span>
-                         <div v-if="hasTask(day.date)" class="w-1 h-1 bg-blue-500 rounded-full mt-0.5"></div>
+                        <span class="leading-none">{{ day.dayNum }}</span>
+                        
+                        <span class="text-[10px] leading-none -mt 0" :class="getLunarClass(day)">{{ day.lunarText }}</span>
+                        
+                        <div v-if="hasTask(day.date)" class="w-1 h-1 bg-blue-500 rounded-2xl mt-0.5"></div>
                     </div>
                 </div>
                 
@@ -254,64 +257,43 @@
 
     <div class="flex-1 overflow-hidden relative bg-white dark:bg-gray-900 flex flex-col">
         
-        <div v-if="currentTab === 'now'" class="h-full flex flex-col">
+     <div v-if="currentTab === 'now'" class="h-full flex flex-col">
             
-            <div class="p-3 bg-white dark:bg-gray-900 z-30 shrink-0 border-b border-gray-50 dark:border-gray-800">
-                <div class="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1.5 border border-gray-200 dark:border-gray-700 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900 transition-all">
-                    <input v-model="newTask" @keyup.enter="addTask" @touchstart.stop 
+            <div class="shrink-0 bg-white dark:bg-gray-900 z-30 pt-4 px-4 pb-3 shadow-sm/50">
+
+                <div class="flex items-center bg-gray-100 dark:bg-gray-800 rounded-2xl p-1.5 transition-all shadow-inner dark:shadow-none ring-1 ring-transparent focus-within:bg-white dark:focus-within:bg-gray-700 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/50 focus-within:shadow-md">
+                    <div class="bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl mr-2 shadow-md shrink-0 select-none">
+                        今日专注
+                    </div>
+                    <input v-model="newTask" @keyup.enter="addTask" 
+                    @touchstart.stop 
                     @touchend.stop
                     @click.stop
-                    type="text" placeholder="添加待办..." class="bg-transparent flex-1 px-3 outline-none text-sm min-w-0 dark:text-white dark:placeholder-gray-500">
-                    <div class="relative mr-2">
+                    type="text" placeholder="添加待办..." class="bg-transparent flex-1 px-3 py-1 outline-none text-sm min-w-0 dark:text-white dark:placeholder-gray-500 font-medium text-gray-700 placeholder-gray-400">
+                    
+                    <div class="relative mr-1 h-full flex items-center">
                         <select v-model="newDuration" 
-                                class="appearance-none w-14 bg-white dark:bg-gray-700 dark:text-white text-xs p-1.5 rounded-lg outline-none text-center text-gray-500 border border-gray-100 dark:border-gray-600 shadow-sm focus:border-blue-400 transition-colors">
+                                class="appearance-none bg-white dark:bg-gray-600 dark:text-white text-xs px-2.5 py-1.5 rounded-xl outline-none text-center text-gray-600 font-bold shadow-sm focus:text-blue-600 transition-colors">
                             <option value="" disabled selected>h</option>
                             <option v-for="h in [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8]" :key="h" :value="h">
                                 {{ h }}
                             </option>
                         </select>
-                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1 text-gray-400">
-                            <svg class="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                        </div>
                     </div>
-                    <button @click="addTask" class="bg-blue-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md hover:bg-blue-700 active:scale-95 transition">＋</button>
-                </div>
-            </div>
-            
-            <div v-if="activeQuadrantTasks.length > 0" class="flex flex-col shrink-0 max-h-[35%] border-b border-gray-100 dark:border-gray-800">
-                <div class="bg-white dark:bg-gray-900 py-2 px-4 flex items-center shrink-0 z-10 sticky top-0">
-                    <div class="h-3 w-1 bg-orange-400 rounded-full mr-2"></div>
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">来自四象限</span>
-                </div>
-                <div class="overflow-y-auto px-3 pb-2 space-y-2">
-                    <div v-for="task in activeQuadrantTasks" :key="task.id" 
-                         class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center group">
-                        <button @click="toggleTask(task)" class="mr-3 text-gray-300 hover:text-blue-500">
-                            <div class="w-5 h-5 border-2 border-current rounded-full"></div>
-                        </button>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center">
-                                <span class="font-medium truncate text-sm text-gray-700 dark:text-gray-200">{{ task.text }}</span>
-                                <span class="ml-2 text-[10px] px-1 rounded border bg-gray-50 dark:bg-gray-700 dark:border-gray-600 text-gray-400">Q{{task.q}}</span>
-                            </div>
-                            <div v-if="task.duration > 0" class="mt-1.5 h-1 w-full bg-red-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-blue-500 rounded-full transition-all" :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }"></div>
-                            </div>
-                        </div>
-                        <button @click="startTimer(task)" class="ml-2 text-gray-300 hover:text-blue-600 p-1">▶</button>
-                    </div>
+                    <button @click="addTask" class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30 hover:bg-blue-700 active:scale-90 transition transform">＋</button>
                 </div>
             </div>
 
-            <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
-                <div class="bg-white dark:bg-gray-900 py-2 px-4 flex items-center shrink-0 z-10 sticky top-0">
-                    <div class="h-3 w-1 bg-blue-500 rounded-full mr-2"></div>
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">今日日程 / 临时待办</span>
-                </div>
-                <div class="flex-1 overflow-y-auto px-3 pb-2 space-y-2">
+            <div class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+                <div class="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+                    
+                    <div v-if="inboxTasks.length === 0" class="text-center py-10 opacity-30 text-gray-500 dark:text-gray-400">
+                        <p class="text-xs">暂无临时任务</p>
+                    </div>
+
                     <div v-for="task in inboxTasks" :key="task.id" 
-                        class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden transition-all duration-300"
-                        :class="{'opacity-70': task.done}"> 
+                        class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm mb-2.5 overflow-hidden transition-all duration-300 ring-1 ring-gray-100/50 dark:ring-white/5 hover:shadow-md"
+                        :class="{'opacity-60 grayscale': task.done}">
                         
                         <div class="p-3 flex items-center group relative cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
                             @touchstart="handleTouchStart(task, $event)"
@@ -320,8 +302,7 @@
                             @click="handleTaskClick(task)"
                             @mousedown="handleTouchStart(task)" 
                             @mouseup="handleTouchEnd(task)"
-                            @mouseleave="handleTouchMove"
-                            >
+                            @mouseleave="handleTouchMove">
                             
                             <button 
                                 @touchstart.stop 
@@ -329,14 +310,14 @@
                                 @mousedown.stop 
                                 @mouseup.stop 
                                 @click.stop="toggleTask(task)" 
-                                class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 transition-colors">
+                                class="mr-3 shrink-0 text-gray-300 hover:text-blue-500 transition-colors p-1 -ml-1">
                                 <div v-if="task.done" class="text-blue-500 text-lg">☑</div>
                                 <div v-else class="w-5 h-5 border-2 border-current rounded-full"></div>
                             </button>
 
                             <div class="flex-1 min-w-0">
                                 <span :class="{'line-through text-gray-400': task.done}" 
-                                    class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">
+                                    class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block leading-relaxed">
                                     {{ task.text }}
                                 </span>
                                 <div v-if="task.duration > 0" class="mt-1 h-1 w-24 bg-red-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -347,29 +328,22 @@
                                 </div>
                             </div>
 
-                            <div class="flex items-center space-x-1 ml-2">
-                                
+                            <div class="flex items-center space-x-2 ml-2">
                                <button 
                                     @touchstart.stop 
                                     @touchend.stop 
-                                    @mousedown.stop 
-                                    @mouseup.stop 
                                     @click.stop="task.expanded = true" 
-                                    class="text-gray-300 hover:text-blue-600 px-1.5 py-1 text-lg leading-none transition-colors" title="添加子步骤">
-                                    
+                                    class="text-gray-300 hover:text-blue-600 p-1 transition-colors" title="添加子步骤">
+                                   
                                 </button>
-
                                 <button 
                                     v-if="!task.done" 
                                     @touchstart.stop 
                                     @touchend.stop 
-                                    @mousedown.stop 
-                                    @mouseup.stop 
                                     @click.stop="startTimer(task)" 
-                                    class="text-gray-300 hover:text-blue-600 px-1.5 py-1 text-sm">
+                                    class="text-gray-300 hover:text-blue-600 p-1 transition-colors">
                                     ▶
                                 </button>
-                                
                                 <div class="text-gray-300 transition-transform duration-300 text-xs px-1" :class="{'rotate-180': task.expanded}">
                                     ▼
                                 </div>
@@ -377,7 +351,6 @@
                         </div>
 
                         <div v-if="task.expanded" class="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 px-3 py-2 animate-fade-in">
-                            
                             <div v-if="task.subtasks && task.subtasks.length > 0" class="space-y-2 mb-2">
                                 <div v-for="sub in task.subtasks" :key="sub.id" class="flex items-center group/sub">
                                     <button @click="toggleSubtask(sub)" class="mr-2 text-gray-400 hover:text-blue-500">
@@ -390,7 +363,6 @@
                                     <button @click="deleteSubtask(task, sub.id)" class="text-gray-300 hover:text-red-400 ml-2 px-2">×</button>
                                 </div>
                             </div>
-
                             <div class="flex items-center">
                                 <span class="text-gray-400 text-xs mr-2">↳</span>
                                 <input type="text" 
@@ -400,46 +372,98 @@
                                         @click.stop
                                        class="flex-1 bg-transparent text-xs outline-none text-gray-600 dark:text-gray-300 placeholder-gray-400 py-1"
                                        @keyup.enter="addSubtask(task, $event)"
-                                       @blur="addSubtask(task, $event)"
-                                >
+                                       @blur="addSubtask(task, $event)">
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
 
+            <div class="shrink-0 h-36 bg-gray-50 dark:bg-gray-950 grid grid-cols-2 gap-0 px-4 pb-3 pt-2">
+                
+                <div class="flex flex-col overflow-hidden border-r border-gray-200 dark:border-gray-800 pr-3">
+                    <div class="py-2 flex items-center justify-between shrink-0">
+                         <div class="flex items-center">
+                            <div class="h-2 w-2 bg-orange-400 rounded-full mr-2"></div>
+                            <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">四象限</span>
+                         </div>
+                         <button @click="currentTab='quadrant'" class="text-[10px] text-blue-500 font-bold">全部 ></button>
                     </div>
                     
-                    <div v-if="inboxTasks.length === 0" class="text-center py-6 opacity-30 mt-4 text-gray-500 dark:text-gray-400">
-                        <p class="text-xs">暂无临时任务</p>
+                    <div class="flex-1 grid grid-rows-2 grid-flow-col gap-2 auto-cols-[90%] overflow-x-auto no-scrollbar items-center pb-1">
+                         <div v-if="activeQuadrantTasks.length === 0" class="row-span-2 w-full flex items-center justify-center text-xs text-gray-300">无任务</div>
+                         
+                         <div v-for="task in activeQuadrantTasks" :key="task.id" 
+                              @click="handleTileClick(task)"
+                              class="flex items-center justify-between w-full h-full rounded-xl px-3 py-1.5 relative active:scale-95 transition-transform shadow-sm"
+                              :class="{
+                                // 用背景色区分优先级，去掉边框
+                                'bg-red-50/80 dark:bg-red-900/20': task.q===1,
+                                'bg-blue-50/80 dark:bg-blue-900/20': task.q===2,
+                                'bg-yellow-50/80 dark:bg-yellow-900/20': task.q===3,
+                                'bg-white dark:bg-gray-800': task.q===4
+                              }">
+                            
+                            <button @touchstart.stop @click.stop="toggleTask(task)" class="mr-2 shrink-0 p-1 -ml-1 opacity-60">
+                                <div class="w-3.5 h-3.5 border-2 border-current rounded-full transition-colors" :class="{'bg-blue-500 border-blue-500 opacity-100': task.done, 'text-gray-300': !task.done}"></div>
+                            </button>
+
+                            <div class="flex-1 min-w-0 flex flex-col justify-center mr-1">
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate leading-none">{{ task.text }}</span>
+                                <div class="flex items-center mt-1 opacity-60">
+                                    <span class="text-[9px] font-black" :class="{'text-red-500': task.q===1, 'text-blue-500': task.q===2, 'text-yellow-600': task.q===3}">Q{{task.q}}</span>
+                                    <span v-if="task.startDate" class="ml-1 text-[8px] font-medium">{{ task.startDate.slice(5) }}</span>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col items-end justify-between self-stretch py-0.5">
+                                <button @touchstart.stop @click.stop="startTimer(task)" class="text-blue-500/80 active:scale-90 transition">
+                                    <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                                <span class="text-[8px] font-mono text-gray-400 mt-auto leading-none">{{ (task.accumulated || 0).toFixed(1) }}h</span>
+                            </div>
+                         </div>
                     </div>
                 </div>
+
+                <div class="flex flex-col overflow-hidden pl-3">
+                    <div class="py-2 flex items-center shrink-0">
+                        <div class="h-2 w-2 bg-pink-400 rounded-full mr-2"></div>
+                        <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">近期重要</span>
+                    </div>
+
+                    <div class="flex-1 overflow-x-auto whitespace-nowrap flex items-start space-x-2 no-scrollbar pb-1">
+                        <div v-if="homeUpcomingList.length === 0" class="w-full text-xs text-gray-300 text-center py-6">无近期事项</div>
+                        
+                        <div v-for="day in homeUpcomingList" :key="day.id" 
+    class="inline-flex flex-col justify-between shrink-0 w-[40%] h-full bg-blue-50/60 dark:bg-gray-800 rounded-2xl px-3 py-2.5 relative overflow-hidden active:scale-95 transition-transform border border-gray-100 dark:border-gray-800/50">
+                            
+                            <div class="absolute -right-2 -bottom-2 text-5xl opacity-[0.03] select-none pointer-events-none rotate-12">⏳</div>
+
+                            <div class="flex justify-between items-start mb-0.5">
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{{ day.name }}</span>
+                                <span v-if="day.isLunar" class="text-[8px] bg-red-100 text-red-600 px-1 rounded font-bold scale-90">农</span>
+                            </div>
+                            
+                            <div class="flex items-baseline space-x-0.5 my-auto">
+                                <span class="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">
+                                    {{ Math.abs(getDaysUntilData(day).days) }}
+                                </span>
+                                <span class="text-[10px] font-bold text-blue-300/80">天后</span>
+                            </div>
+                            
+                            <div class="text-[9px] font-bold text-gray-400/60 truncate mt-auto">
+                                {{ day.date.slice(5) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
-           <div v-if="homeUpcomingList.length > 0" class="shrink-0 p-3 pt-0 bg-gradient-to-t from-gray-50 to-transparent dark:from-gray-900 overflow-hidden">
-                <div class="flex items-center mb-2 pl-2 border-l-4 border-pink-400">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">近期重要 (10天内)</span>
-                </div>
-                
-                <div class="flex overflow-x-auto gap-3 no-scrollbar pb-1">
-                    <div v-for="day in homeUpcomingList" :key="day.id" 
-                        class="shrink-0 w-[45%] bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between h-24 relative overflow-hidden transition-all active:scale-95">
-                        <div class="absolute -right-2 -bottom-2 text-6xl opacity-5 dark:opacity-10 select-none pointer-events-none">⏳</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium truncate z-10 flex justify-between">
-                            <span class="truncate pr-1">{{ day.name }}</span>
-                            <span v-if="day.isLunar" class="shrink-0 text-[9px] bg-red-100 text-red-600 px-1 rounded dark:bg-red-900 dark:text-red-200">农</span>
-                        </div>
-                        <div class="z-10 mt-1">
-                            <span class="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
-                                {{ Math.abs(getDaysUntilData(day).days) }}
-                            </span>
-                            <span class="text-[10px] text-gray-400 ml-1">天后</span>
-                        </div>
-                        <div class="text-[9px] text-gray-300 dark:text-gray-600 z-10 flex items-center truncate">
-                             {{ day.date }}
-                             <span v-if="day.repeat && day.repeat !== 'none'" class="ml-1 opacity-70">↺</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
+
+        
 
         <div v-if="currentTab === 'quadrant'" class="h-full quadrant-grid text-sm">
              <div v-for="q in [1,2,3,4]" :key="q" class="q-cell relative group"
@@ -554,7 +578,7 @@
                 </div>
             </div>
             <div v-for="task in progressTasks" :key="task.id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-3 overflow-hidden">
-                <div @click="task.expanded = !task.expanded" class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                <div @click="handleProgressItemClick(task)" class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition select-none">
                     <div class="flex-1">
                          <div class="font-medium text-gray-800 dark:text-gray-200 flex items-center text-sm">
                             <span :class="{'opacity-50 line-through': task.done}">{{ task.text }}</span>
@@ -846,7 +870,35 @@
             <button @click="showSyncModal = false" class="absolute top-4 right-4 text-gray-300 hover:text-gray-500">×</button>
         </div>
     </div>
+    <div v-if="showProgressModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4" @click.self="showProgressModal = false">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-[16rem] rounded-2xl overflow-hidden shadow-2xl animate-scale-up border dark:border-gray-700 transition-all">
+            
+            <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800">
+                <span class="font-bold text-sm text-gray-800 dark:text-gray-100">调整工时</span>
+                <button @click="showProgressModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">×</button>
+            </div>
+            
+            <div class="p-5 text-center">
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate px-2">
+                    任务: <span class="font-bold text-gray-700 dark:text-gray-300">{{ progressForm.taskText }}</span>
+                </div>
+                
+                <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-xl px-4 py-3 mx-4 mb-4 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-gray-800 transition-all">
+                    <input ref="progressInputRef" 
+                           v-model="progressForm.hours" 
+                           type="number" 
+                           step="0.5" 
+                           class="w-20 bg-transparent text-2xl font-bold text-blue-600 dark:text-blue-400 outline-none text-center"
+                           @keyup.enter="saveTaskProgress">
+                    <span class="text-sm text-gray-400 font-bold ml-1 pt-1">h</span>
+                </div>
 
+                <button @click="saveTaskProgress" class="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 active:scale-95 transition-transform">
+                    确认
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 <script>
     const { createApp, ref, computed, watch, onMounted, reactive } = Vue;
@@ -889,6 +941,10 @@
                 } else {
                     isDark.value = systemDark;
                 }
+                // --- ✅ 新增：暴力禁止 iOS 双击缩放/上跳 ---
+                document.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                }, { passive: false });
                 updateTheme();
                 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
                     // 只有当用户没有“强制”手动锁定过主题时，才自动跟随（或者你可以选择总是跟随）
@@ -1245,8 +1301,8 @@
                 const day = String(d.getDate()).padStart(2, '0');
                 const dateStr = `${year}-${month}-${day}`;
 
-                quadrantForm.startDate = dateStr; 
-                quadrantForm.endDate = dateStr; 
+                quadrantForm.startDate = ''; 
+                quadrantForm.endDate = '';
                 
                 quadrantForm.repeat = 'none';
                 showQuadrantModal.value = true;
@@ -1426,30 +1482,39 @@
                 task.subtasks = task.subtasks.filter(s => s.id !== subId);
             };
 
-            // --- 核心分类 (修改版：增加日期筛选) ---
+            // --- 核心分类 (修改版：增加优先级排序) ---
             const activeQuadrantTasks = computed(() => {
-                // 获取当前选中的日期 (默认是今天)
                 const sel = new Date(selectedDate.value);
                 sel.setHours(0,0,0,0);
                 const selTime = sel.getTime();
 
                 return tasks.value.filter(t => {
-                    // 1. 必须是四象限任务 (q>0) 且 未完成 (!done)
+                    // 1. 基础筛选：必须是四象限任务且未完成
                     if (t.q <= 0 || t.done) return false;
 
-                    // 2. 筛选：如果设置了“开始日期”
+                    // 2. 日期筛选：如果设置了“开始日期”，还没到日子就不显示
                     if (t.startDate) {
                         const s = new Date(t.startDate);
                         s.setHours(0,0,0,0);
-                        
-                        // 如果【当前日期】早于【开始日期】，说明还没到时候，隐藏它
                         if (selTime < s.getTime()) return false;
                     }
-                    
-                    // (如果没有设置开始日期，默认一直显示)
                     return true;
-                }).sort((a, b) => a.q - b.q); // 按象限 1-2-3-4 排序
+                }).sort((a, b) => {
+                    // 排序逻辑：
+                    // 1. 象限优先 (1 > 2 > 3 > 4)
+                    if (a.q !== b.q) return a.q - b.q;
+                    
+                    // 2. 同象限下，【带时间阶段】的优先
+                    const aHasDate = !!(a.startDate || a.endDate);
+                    const bHasDate = !!(b.startDate || b.endDate);
+                    
+                    if (aHasDate && !bHasDate) return -1; // a 有日期，a 排前
+                    if (!aHasDate && bHasDate) return 1;  // b 有日期，b 排前
+                    
+                    return 0; // 都有或都没有，保持原序
+                });
             });
+                
             
             const inboxTasks = computed(() => {
                 const key = formatDateKey(selectedDate.value);
@@ -1639,7 +1704,7 @@
             const selectDate = (day) => selectedDate.value = day.date;
             const isSameDate = (d1, d2) => d1.getDate()===d2.getDate() && d1.getMonth()===d2.getMonth() && d1.getFullYear()===d2.getFullYear();
             const getDayClass = (day) => {
-                if (isSameDate(day.date, selectedDate.value)) return 'bg-blue-600 dark:bg-blue-500 text-white shadow-md ring-2 ring-blue-200 dark:ring-blue-800';
+                if (isSameDate(day.date, selectedDate.value)) return 'bg-blue-600 dark:bg-blue-500 text-white shadow-lg ring-2 ring-blue-200 dark:ring-blue-800';
                 if (isSameDate(day.date, new Date())) return 'text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/30';
                 return 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300';
             };
@@ -1740,11 +1805,11 @@
                         if (selTime < (s.getTime() - buffer)) startOk = false;
                     }
 
-                    if (t.endDate) {
-                        const e = new Date(t.endDate);
-                        e.setHours(0,0,0,0);
-                        if (selTime > e.getTime()) endOk = false;
-                    }
+                    if (t.endDate && t.done) { // ✅ 修改：只有任务已完成，且超过了结束日期，才隐藏
+                    const e = new Date(t.endDate);
+                    e.setHours(0,0,0,0);
+                    if (selTime > e.getTime()) endOk = false;
+                }
 
                     return startOk && endOk;
                 });
@@ -1754,10 +1819,97 @@
                 const map = { 'none': '', 'year': '每年', 'month': '每月', 'week': '每周', 'day': '每日' };
                 return map[r] || '';
             };
-
+            
             const addCountdown = () => { const n = prompt("事件:"); if(!n) return; const d = prompt("日期(YYYY-MM-DD):"); if(n&&d) countdowns.value.push({ id: Date.now(), name: n, date: d, color: 'border-blue-500', pinned: false }); };
             const deleteCountdown = (id) => { if(confirm('删除?')) countdowns.value = countdowns.value.filter(c => c.id !== id); };
             const editCountdown = (item) => { const n = prompt("名称:", item.name); const d = prompt("日期:", item.date); if(n&&d) { item.name = n; item.date = d; } };
+
+            // --- 新增：双击修改工时 & 模拟双击逻辑 ---
+            const lastTap = ref({ id: null, time: 0 });
+
+            // ✅ 新增：工时弹窗状态
+            const showProgressModal = ref(false);
+            const progressForm = reactive({ taskId: null, taskText: '', hours: 0 });
+            const progressInputRef = ref(null);
+
+            // ✅ 修改：增加防抖逻辑，完美区分单击和双击
+            let clickTimer = null; // 用于存储定时器
+
+            const handleTileClick = (task) => {
+                const now = Date.now();
+                
+                // 判断是否双击
+                if (lastTap.value.id === task.id && (now - lastTap.value.time) < 300) {
+                    // --- 双击逻辑 ---
+                    clearTimeout(clickTimer); // 清除单击的定时器，阻止弹窗
+                    editTaskProgress(task);   // 执行修改工时
+                    lastTap.value = { id: null, time: 0 }; // 重置
+                } else {
+                    // --- 单击逻辑 ---
+                    lastTap.value = { id: task.id, time: now };
+                    
+                    // 延迟 300ms 执行单击动作，给双击留出反应时间
+                    clickTimer = setTimeout(() => {
+                        openEditModal(task); 
+                    }, 300);
+                }
+            };
+
+            // ✅ 修改：唤起自定义弹窗，而不是 ugly prompt
+            const editTaskProgress = (task) => {
+                progressForm.taskId = task.id;
+                progressForm.taskText = task.text;
+                progressForm.hours = task.accumulated || 0;
+                showProgressModal.value = true;
+                
+                // 自动聚焦
+                setTimeout(() => {
+                    if(progressInputRef.value) progressInputRef.value.focus();
+                }, 100);
+            };
+
+            // ✅ 新增：保存工时
+            const saveTaskProgress = () => {
+                const task = tasks.value.find(t => t.id === progressForm.taskId);
+                if (task) {
+                    const val = parseFloat(progressForm.hours);
+                    if (!isNaN(val) && val >= 0) {
+                        task.accumulated = val;
+                        // 记录日志
+                        if(!task.log) task.log = [];
+                        task.log.unshift({
+                            date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}),
+                            duration: 0, 
+                            note: '手动调整'
+                        });
+                    }
+                }
+                showProgressModal.value = false;
+            };
+
+            // ✅ 进度页专用：区分单击和双击
+            // 这段代码既保留了“单击展开明细”，又增加了“双击修改工时”
+            let progressClickTimer = null; 
+
+            const handleProgressItemClick = (task) => {
+                const now = Date.now();
+                
+                // 判断是否双击
+                if (lastTap.value.id === task.id && (now - lastTap.value.time) < 300) {
+                    // --- 双击情况 ---
+                    clearTimeout(progressClickTimer); // 阻止单击动作（不展开）
+                    editTaskProgress(task);           // 执行修改工时
+                    lastTap.value = { id: null, time: 0 }; 
+                } else {
+                    // --- 单击情况 ---
+                    lastTap.value = { id: task.id, time: now };
+                    
+                    // 延迟 300ms 执行，确认你没有点第二下，才展开/收起
+                    progressClickTimer = setTimeout(() => {
+                        task.expanded = !task.expanded; // 👈 看这里！原本的功能在这里保留着
+                    }, 300);
+                }
+            };
 
             return {
                 isDark, toggleTheme,
@@ -1784,7 +1936,11 @@
                 showSyncModal, githubToken, gistId, handleSync, syncStatus,
                 // 下面这一行之前少了个逗号，现在补上了
                 handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask, handleBackgroundClick,
-                
+                showProgressModal, 
+                progressForm, 
+                progressInputRef, 
+                saveTaskProgress,
+                handleTileClick, editTaskProgress,handleProgressItemClick,
             };
         }
     }).mount('#app');
