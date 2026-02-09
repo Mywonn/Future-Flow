@@ -153,6 +153,38 @@
                 transform: translateX(0);
             }
         }
+        /* 优化后的样式，解决边缘漏色 */
+        .swipe-container {
+            position: relative;
+            overflow: hidden; /* 必须溢出隐藏，确保红色底层不超出边界 */
+            touch-action: pan-y;
+            border-radius: 1rem; /* 与卡片圆角保持一致 */
+        }
+
+        .swipe-content {
+            position: relative;
+            z-index: 2; /* 确保面层在最上方 */
+            width: 100%;
+            background-color: inherit; /* 继承父级背景色 */
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .delete-action {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 80px;
+            background-color: #ef4444; 
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1; /* 底层 */
+            font-size: 12px;
+            font-weight: bold;
+            /* 移除这里的圆角设置，交给父容器 swipe-container 的 overflow:hidden 处理 */
+        }
     </style> 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
@@ -705,26 +737,35 @@
     <div class="flex-1 overflow-y-auto p-4 pt-2 pb-24">
         
         <div v-if="upcomingList.length > 0" class="space-y-3 mb-6">
-            <div v-for="day in upcomingList" :key="day.id" 
-                 @click="openCountdownModal('edit', day)"
-                 class="bg-white dark:bg-gray-800 rounded-2xl p-4 flex items-center shadow-sm border border-gray-100 dark:border-gray-700 active:scale-95 transition-all">
-                
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center space-x-2 mb-1">
-                        <span class="font-bold text-gray-800 dark:text-white truncate">{{ day.name }}</span>
-                        <span v-if="day.isLunar" class="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">农</span>
-                    </div>
-                    <div class="text-[10px] text-gray-400 font-medium">目标日期: {{ day.date }} {{ getRepeatText(day.repeat) }}</div>
-                </div>
+    <div v-for="day in upcomingList" :key="day.id" class="swipe-container mb-3">
+        
+        <div @click.stop="deleteCountdown(day.id)" class="delete-action">
+            删除
+        </div>
 
-                <div class="text-right pl-4 border-l border-gray-50 dark:border-gray-700 ml-2">
-                    <div class="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">
-                        {{ getDaysUntilData(day).days }}
-                    </div>
-                    <div class="text-[9px] font-black text-gray-300 dark:text-gray-500 mt-1 tracking-tighter">DAYS</div>
+        <div @touchstart="handleSwipeStart($event, day.id)"
+             @touchmove="handleSwipeMove($event, day.id)"
+             @touchend="handleSwipeEnd($event, day.id)"
+             @click="swipeItemId === day.id ? swipeItemId = null : openCountdownModal('edit', day)"
+             class="swipe-content bg-white dark:bg-gray-800 rounded-2xl p-4 flex items-center shadow-sm border border-gray-100 dark:border-gray-700 active:scale-95 transition-all"
+             :style="{ transform: swipeItemId === day.id ? 'translateX(-80px)' : 'translateX(0)' }">
+            
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center space-x-2 mb-1">
+                    <span class="font-bold text-gray-800 dark:text-white truncate">{{ day.name }}</span>
+                    <span v-if="day.isLunar" class="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">农</span>
                 </div>
+                <div class="text-[10px] text-gray-400 font-medium">目标日期: {{ day.date }} {{ getRepeatText(day.repeat) }}</div>
+            </div>
+            <div class="text-right pl-4 border-l border-gray-50 dark:border-gray-700 ml-2">
+                <div class="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">
+                    {{ getDaysUntilData(day).days }}
+                </div>
+                <div class="text-[9px] font-black text-gray-300 dark:text-gray-500 mt-1 tracking-tighter">DAYS</div>
             </div>
         </div>
+    </div>
+    </div>
 
         <div v-else class="py-20 text-center opacity-20">
             <div class="text-4xl mb-2">⏳</div>
@@ -742,15 +783,27 @@
             </button>
 
             <div v-if="showExpiredCountdown" class="mt-3 space-y-2 opacity-60 grayscale">
-                <div v-for="day in expiredList" :key="day.id" 
-                     @click="openCountdownModal('edit', day)"
-                     class="bg-white dark:bg-gray-800 rounded-xl p-3 flex items-center border-l-4 border-gray-300">
-                    <div class="flex-1 min-w-0">
-                        <div class="text-sm font-bold text-gray-700 dark:text-gray-200 truncate">{{ day.name }}</div>
-                        <div class="text-[9px] text-gray-400">{{ day.date }}</div>
+                <div v-for="day in expiredList" :key="day.id" class="swipe-container mb-2">
+                    
+                    <div @click.stop="deleteCountdown(day.id)" class="delete-action">
+                        删除
                     </div>
-                    <div class="text-xs font-mono text-gray-400">
-                        已过去 {{ Math.abs(getDaysUntilData(day).days) }} 天
+
+                    <div @touchstart="handleSwipeStart($event, day.id)"
+                        @touchmove="handleSwipeMove($event, day.id)"
+                        @touchend="handleSwipeEnd($event, day.id)"
+                        @click="swipeItemId === day.id ? swipeItemId = null : openCountdownModal('edit', day)"
+                        class="swipe-content bg-white dark:bg-gray-800 rounded-xl p-3 flex items-center border-l-4 border-gray-300 shadow-sm"
+                        :style="{ transform: swipeItemId === day.id ? 'translateX(-80px)' : 'translateX(0)' }">
+                        
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-bold text-gray-700 dark:text-gray-200 truncate">{{ day.name }}</div>
+                            <div class="text-[9px] text-gray-400">{{ day.date }}</div>
+                        </div>
+                        
+                        <div class="text-xs font-mono text-gray-400">
+                            已过去 {{ Math.abs(getDaysUntilData(day).days) }} 天
+                        </div>
                     </div>
                 </div>
             </div>
@@ -870,6 +923,12 @@
                     开启“每年重复”将自动计算下一个纪念日。<br>
                     如果是农历生日，请在上方选择该农历对应的<span class="text-blue-500">公历日期</span>，系统会自动转换。
                 </p>
+                <div v-if="countdownFormMode === 'edit'" class="mt-4">
+                    <button @click="deleteCountdown(countdownForm.id); closeCountdownModal();" 
+                            class="w-full py-3 bg-white dark:bg-gray-700 text-red-500 rounded-xl font-bold shadow-sm active:scale-95 transition-all border border-red-50 dark:border-red-900/20">
+                        删除此倒数日
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -2048,6 +2107,37 @@
                 }
             };
 
+            // --- 倒数日左滑删除逻辑 ---
+            const swipeItemId = ref(null); // 记录当前哪个 ID 被滑开了
+            const startX = ref(0);
+            const currentOffsetX = ref(0);
+
+            const handleSwipeStart = (e, id) => {
+                // 如果点的是已经滑开的，就别重置了
+                if (swipeItemId.value !== id) {
+                    swipeItemId.value = null; 
+                }
+                startX.value = e.touches[0].clientX;
+            };
+
+            const handleSwipeMove = (e, id) => {
+                const deltaX = e.touches[0].clientX - startX.value;
+                // 只有向左滑且滑动距离大于 10px 才触发预览
+                if (deltaX < -10) {
+                    currentOffsetX.value = deltaX;
+                }
+            };
+
+            const handleSwipeEnd = (e, id) => {
+                // 如果滑动超过 50px，就保持打开状态
+                if (currentOffsetX.value < -50) {
+                    swipeItemId.value = id;
+                } else {
+                    swipeItemId.value = null;
+                }
+                currentOffsetX.value = 0;
+            };
+
             // --- 从第 1375 行开始完全替换至结尾 ---
             return {
                 // ... 你原有的其他变量 ...
@@ -2087,7 +2177,14 @@
                 progressForm, 
                 progressInputRef, 
                 saveTaskProgress,
+                swipeItemId,
+                startX,
+                currentOffsetX,
+                handleSwipeStart,
+                handleSwipeMove,
+                handleSwipeEnd,
                 handleTileClick, editTaskProgress, handleProgressItemClick
+                
             };
         }
     }).mount('#app');
