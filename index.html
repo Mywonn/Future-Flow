@@ -21,6 +21,18 @@
             darkMode: 'class',
         }
     </script>
+    <script>
+        // 立即执行：在页面渲染前判断主题，防止白屏闪烁
+        try {
+            const savedTheme = localStorage.getItem('mike_theme');
+            const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        } catch (e) {}
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.min.js"></script>
     
    <style>
@@ -188,6 +200,24 @@
     </style> 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
+ <div id="splash-screen" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 transition-opacity duration-500">
+        <div class="relative flex flex-col items-center">
+            <img src="img/logo.png" alt="Logo" class="w-20 h-20 mb-4 object-contain animate-pulse">
+            
+            <div class="w-32 h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-600 w-1/2 animate-[shimmer_1s_infinite]"></div>
+            </div>
+            
+            <p class="mt-4 text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Loading...</p>
+        </div>
+    </div>
+
+    <style>
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+    </style>   
 <div id="app" 
      class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" 
      @click="handleBackgroundClick"
@@ -198,8 +228,8 @@
         <div class="flex flex-col w-full">
             <div class="px-4 pt-3 pb-1 flex justify-between items-center relative">
                 
-                <div class="flex justify-start items-center">
-                    <img src="img/logo.png" alt="Logo" class="w-8 h-8 object-contain rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 shadow-sm">
+                <div class="flex justify-start items-center" @click="handleLogoClick">
+                    <img src="img/logo.png" alt="Logo" class="w-8 h-8 object-contain rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 shadow-sm active:scale-90 transition-transform duration-200">
                 </div>
 
                 <div class="absolute left-1/2 -translate-x-1/2 z-50">
@@ -721,27 +751,28 @@
 
         <div v-if="currentTab === 'progress'" class="h-full p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900 space-y-4 pb-20">
     
-    <div class="bg-gradient-to-br from-blue-600 to-blue-500 rounded-2xl p-4 text-white shadow-md shadow-blue-500/20">
-    <div class="flex justify-between items-center mb-2">
-        <div>
-            <p class="text-[9px] font-bold opacity-70 uppercase tracking-wider">总完成工时</p>
-            <h3 class="text-2xl font-black">{{ progressStats.done }} <span class="text-xs font-medium opacity-60 ml-0.5">h</span></h3>
+    <div class="bg-gradient-to-br from-blue-600 to-blue-500 rounded-2xl p-5 text-white shadow-md shadow-blue-500/20 flex justify-between items-center relative overflow-hidden">
+            
+            <div class="absolute -right-6 -bottom-6 text-9xl opacity-10 rotate-12 select-none">🏆</div>
+
+            <div class="relative z-10">
+                <p class="text-[10px] font-bold opacity-70 uppercase tracking-wider mb-1">累计专注投入</p>
+                <div class="flex items-baseline">
+                    <h3 class="text-4xl font-black tracking-tight">{{ progressStats.hours }}</h3>
+                    <span class="text-sm font-medium opacity-80 ml-1">h</span>
+                </div>
+            </div>
+            
+            <div class="w-px h-10 bg-white/20 mx-4 relative z-10"></div>
+
+            <div class="text-right relative z-10">
+                <p class="text-[10px] font-bold opacity-70 uppercase tracking-wider mb-1">已达成目标</p>
+                <div class="flex items-baseline justify-end">
+                    <h3 class="text-3xl font-black">{{ progressStats.doneCount }}</h3>
+                    <span class="text-sm font-medium opacity-60 ml-1">/ {{ progressStats.totalCount }}</span>
+                </div>
+            </div>
         </div>
-        <div class="text-right">
-            <p class="text-[9px] font-bold opacity-70 uppercase tracking-wider">完成率</p>
-            <p class="text-lg font-black">{{ progressStats.percent }}%</p>
-        </div>
-    </div>
-    
-    <div class="h-1.5 bg-white/20 rounded-full overflow-hidden">
-        <div class="h-full bg-white progress-bar" :style="{ width: progressStats.percent + '%' }"></div>
-    </div>
-    
-    <div class="flex justify-between items-center mt-2 opacity-60 text-[9px] font-medium">
-        <span>目标: {{ progressStats.total }}h</span>
-        <span>已记录 {{ tasks.length }} 项任务</span>
-    </div>
-</div>
 
     <div class="space-y-3">
         <div v-if="activeProgressTasks.length === 0" class="py-10 text-center text-gray-400 text-xs">
@@ -755,13 +786,25 @@
             <div class="flex justify-between items-start mb-2">
                 <div class="flex-1 min-w-0 pr-4">
                     <div class="flex items-center space-x-2">
-                        <span class="font-bold text-gray-800 dark:text-gray-200 truncate">{{ task.text }}</span>
-                        <span class="text-[9px] bg-gray-100 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded font-black">Q{{ task.q }}</span>
+                        <div v-if="isTaskDone(task, selectedDate)" class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 flex items-center">
+                            ✓ 今日已做
+                        </div>
+
+                        <span class="font-bold text-gray-800 dark:text-gray-200 truncate" 
+                            :class="{'opacity-50 line-through': isTaskDone(task, selectedDate)}">
+                            {{ task.text }}
+                        </span>
+                        
+                        <span class="text-[9px] bg-gray-100 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded font-black shrink-0">Q{{ task.q }}</span>
                     </div>
                 </div>
-                <div class="text-right shrink-0">
-                    <span class="text-sm font-black text-blue-600 dark:text-blue-400">{{ task.accumulated || 0 }}</span>
-                    <span class="text-[10px] text-gray-400 font-medium ml-1">/ {{ task.duration }}h</span>
+                <div class="text-right shrink-0 flex flex-col items-end justify-center">
+                    <span class="text-xs font-black text-blue-600 dark:text-blue-400 mb-0.5">
+                        {{ task.duration > 0 ? Math.min(((task.accumulated || 0) / task.duration * 100), 100).toFixed(0) : 0 }}%
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-medium font-mono">
+                        {{ (task.accumulated || 0).toFixed(1) }} / {{ task.duration }}h
+                    </span>
                 </div>
             </div>
 
@@ -776,7 +819,10 @@
                 <div v-if="task.log && task.log.length > 0" class="space-y-1.5">
                     <div v-for="(entry, index) in task.log.slice(0, 3)" :key="index" class="flex justify-between text-[10px]">
                         <span class="text-gray-500">{{ entry.date }}</span>
-                        <span class="font-mono text-blue-500">+{{ entry.duration.toFixed(1) }}h</span>
+                        <span class="font-mono" 
+                            :class="entry.duration > 0 ? 'text-blue-500' : 'text-red-500'">
+                            {{ entry.duration > 0 ? '+' : '' }}{{ entry.duration.toFixed(1) }}h
+                        </span>
                     </div>
                 </div>
                 <p v-else class="text-[10px] text-gray-400 italic">尚无专注记录</p>
@@ -904,7 +950,7 @@
     </div>
 
     <div class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex justify-around items-center p-1 pb-safe z-30 text-[10px] select-none">
-        <button @click="currentTab = 'now'" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'now' ? 'text-blue-600 dark:text-blue-400 scale-105 font-bold' : 'text-gray-400'">
+        <button @click="handleFocusTabClick" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'now' ? 'text-blue-600 dark:text-blue-400 scale-105 font-bold' : 'text-gray-400'">
             <span class="text-xl mb-1">⚡</span><span>专注</span>
         </button>
         <button @click="currentTab = 'quadrant'" class="flex flex-col items-center p-2 w-1/4 rounded transition" :class="currentTab === 'quadrant' ? 'text-blue-600 dark:text-blue-400 scale-105 font-bold' : 'text-gray-400'">
@@ -1170,29 +1216,81 @@
                 }
             };
 
+            // --- 持久化 & 初始化 ---
             onMounted(() => {
-                // 读取本地存储，或者跟随系统
+                // 1. 读取数据
                 const savedTheme = localStorage.getItem('mike_theme');
+                // ... (中间的主题代码保持不变) ...
+
+                const savedTasks = localStorage.getItem('mike-pro-tasks-v4');
                 const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                
-                if (savedTheme === 'dark') {
+                if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
                     isDark.value = true;
-                } else if (savedTheme === 'light') {
-                    isDark.value = false;
                 } else {
-                    isDark.value = systemDark;
+                    isDark.value = false;
                 }
-                // --- ✅ 新增：暴力禁止 iOS 双击缩放/上跳 ---
-                document.addEventListener('dblclick', (e) => {
-                    e.preventDefault();
-                }, { passive: false });
+                if (savedTasks) tasks.value = JSON.parse(savedTasks);
+                
+                const savedCountdowns = localStorage.getItem('mike-pro-countdowns-v4');
+                if (savedCountdowns) countdowns.value = JSON.parse(savedCountdowns);
+
+                const savedToken = localStorage.getItem('mike_github_token');
+                if(savedToken) githubToken.value = savedToken;
+                const savedGistId = localStorage.getItem('mike_gist_id');
+                if(savedGistId) gistId.value = savedGistId;
+                
                 updateTheme();
-                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-                    // 只有当用户没有“强制”手动锁定过主题时，才自动跟随（或者你可以选择总是跟随）
-                    // 这里为了体验顺滑，我们让它总是跟随系统变化更新
-                    isDark.value = e.matches;
-                    updateTheme();
+
+                // ✅ 修复：强力滚动逻辑
+                // 不只试一次，而是尝试多次，直到找到元素为止
+                const forceScrollToToday = (retryCount = 0) => {
+                    // 如果尝试超过10次（约3秒）还没找到，就放弃，防止死循环
+                    if (retryCount > 10) return;
+
+                    nextTick(() => {
+                        const id = 'day-' + selectedDate.value.toDateString();
+                        const el = document.getElementById(id);
+                        
+                        if (el) {
+                            console.log("找到日期元素，执行滚动");
+                            el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                        } else {
+                            // 没找到？300毫秒后再试一次
+                            setTimeout(() => forceScrollToToday(retryCount + 1), 300);
+                        }
+                    });
+                };
+
+                // 2. 只有在当前 Tab 是 'now' 或 'quadrant' 时才执行滚动
+                if (currentTab.value === 'now' || currentTab.value === 'quadrant') {
+                    forceScrollToToday();
+                }
+
+                // --- 🕛 自动刷新逻辑保持不变 ---
+                handleMidnightRefresh();
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        const savedDate = localStorage.getItem('last_active_date');
+                        const today = new Date().toDateString();
+                        if (savedDate && savedDate !== today) {
+                             window.location.reload();
+                        } else {
+                            handleMidnightRefresh();
+                        }
+                        localStorage.setItem('last_active_date', today);
+                    }
                 });
+                localStorage.setItem('last_active_date', new Date().toDateString());
+                // ✅ 新增：Vue 挂载完毕，优雅移除启动屏
+                setTimeout(() => {
+                    const splash = document.getElementById('splash-screen');
+                    if (splash) {
+                        // 1. 先变透明 (CSS transition 会处理淡出效果)
+                        splash.style.opacity = '0';
+                        // 2. 动画结束后彻底移除 DOM
+                        setTimeout(() => splash.remove(), 500);
+                    }
+                }, 100); // 稍微延迟 100ms 确保页面完全渲染
             });
 
             // --- 原有逻辑 ---
@@ -1371,29 +1469,55 @@
                 }
             });
 
-            // --- 持久化 & 初始化 ---
-            onMounted(() => {
-                // 注意：这里需要再次调用 theme 逻辑，但上面已经写了，Vue 会自动合并
+            // ================== 🕛 终极版：零点精准自动刷新 ==================
                 
-                const savedTasks = localStorage.getItem('mike-pro-tasks-v4');
-                if (savedTasks) tasks.value = JSON.parse(savedTasks);
-                
-                const savedCountdowns = localStorage.getItem('mike-pro-countdowns-v4');
-                if (savedCountdowns) countdowns.value = JSON.parse(savedCountdowns);
+                const handleMidnightRefresh = () => {
+                    const now = new Date();
+                    const tomorrow = new Date(now);
+                    
+                    // 1. 设置目标时间为明天 00:00:01 (多加1秒作为缓冲，确保万无一失)
+                    tomorrow.setDate(now.getDate() + 1);
+                    tomorrow.setHours(0, 0, 1, 0); 
+                    
+                    // 2. 计算倒计时毫秒数
+                    const timeToMidnight = tomorrow - now;
+                    
+                    console.log(`距离零点自动刷新还有: ${Math.floor(timeToMidnight/1000)} 秒`);
 
-                // 读取同步设置
-                const savedToken = localStorage.getItem('mike_github_token');
-                if(savedToken) githubToken.value = savedToken;
-                const savedGistId = localStorage.getItem('mike_gist_id');
-                if(savedGistId) gistId.value = savedGistId;
-                // ⬇️ 新增：初始化时，强制滚动到今天 (延迟确保 DOM 已渲染)
-                setTimeout(() => scrollToSelected(), 300); 
-                
-                // ⬇️ 确保这里有 updateTheme() (你原来就有的)
-                updateTheme();
-            });
+                    // 3. 启动精准倒计时
+                    setTimeout(() => {
+                        console.log('🕛 零点已到，执行刷新！');
+                        window.location.reload();
+                    }, timeToMidnight);
+                };
 
-            // 自动保存本地数据
+                // A. 初始化时启动精准倒计时
+                handleMidnightRefresh();
+
+                // B. 依然保留 visibilitychange (防止手机休眠导致倒计时暂停)
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        // 手机醒来时，先检查一下是不是已经过点了
+                        const savedDate = localStorage.getItem('last_active_date');
+                        const today = new Date().toDateString();
+
+                        // 如果记录的日期和今天不一样，直接刷
+                        if (savedDate && savedDate !== today) {
+                             window.location.reload();
+                        } else {
+                            // 如果还是同一天，重新校准一下倒计时 (因为休眠时 setTimeout 会不准)
+                            handleMidnightRefresh();
+                        }
+                        // 更新一下“最后活跃日期”
+                        localStorage.setItem('last_active_date', today);
+                    }
+                });
+                
+                // 初始化记录一下日期
+                localStorage.setItem('last_active_date', new Date().toDateString());
+
+                // ===============================================================
+            
             // 自动保存本地数据
             watch([tasks, countdowns], () => { // <--- 删掉了 todayPomodoros
                 localStorage.setItem('mike-pro-tasks-v4', JSON.stringify(tasks.value));
@@ -1511,8 +1635,13 @@ const handleSync = async (direction) => {
                     duration = Math.abs(parseFloat(newDuration.value));
                 }
                 
-                // 2. 获取今天日期
-                const today = getTodayStr();
+                // ❌ 原代码：const today = getTodayStr(); 
+                // ✅ 新代码：获取当前选中日期的字符串 (例如：2026-02-11)
+                const d = new Date(selectedDate.value);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const selectedDateStr = `${year}-${month}-${day}`;
 
                 tasks.value.unshift({
                     id: Date.now(), 
@@ -1525,9 +1654,9 @@ const handleSync = async (direction) => {
                     log: [], 
                     expanded: false, 
                     subtasks: [],     
-                    // 3. 新增：默认日期设为今天
-                    startDate: today,
-                    endDate: today,
+                    // ✅ 修正：任务的开始/结束日期 = 你当前选中的那个日期
+                    startDate: selectedDateStr,
+                    endDate: selectedDateStr,
                     repeat: 'none'
                 });
                 newTask.value = ''; newDuration.value = '';
@@ -1568,16 +1697,16 @@ const handleSync = async (direction) => {
                 quadrantForm.text = '';
                 quadrantForm.duration = '';
                 
-                // 修正：使用【当前日历选中的日期】而不是【今天】
-                // 这样你看着哪天，任务就加在哪天
+                // ✅ 这里的逻辑已经是正确的了（我看你之前的代码这里是对的），确认一下即可
+                // 如果你之前这里用的是 getTodayStr()，请务必改成下面这样：
                 const d = new Date(selectedDate.value);
                 const year = d.getFullYear();
                 const month = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
                 const dateStr = `${year}-${month}-${day}`;
 
-                quadrantForm.startDate = ''; 
-                quadrantForm.endDate = '';
+                quadrantForm.startDate = dateStr; // 默认开始日期 = 选中日期
+                quadrantForm.endDate = dateStr;   // 默认结束日期 = 选中日期
                 
                 quadrantForm.repeat = 'none';
                 showQuadrantModal.value = true;
@@ -1881,17 +2010,36 @@ const handleSync = async (direction) => {
             );
 
             const progressTasks = computed(() => tasks.value.filter(t => t.duration > 0));
-            // 进行中的进度任务
-            const activeProgressTasks = computed(() => progressTasks.value.filter(t => !isTaskDone(t, selectedDate.value)));
-            // 已完成的进度任务
-            const completedProgressTasks = computed(() => progressTasks.value.filter(t => isTaskDone(t, selectedDate.value)));
-            const progressStats = computed(() => {
-                const list = progressTasks.value;
-                if (list.length === 0) return { total: 0, done: 0, percent: 0 };
-                const total = list.reduce((sum, t) => sum + t.duration, 0);
-                const done = list.reduce((sum, t) => sum + (t.accumulated || 0), 0);
-                return { total: parseFloat(total.toFixed(1)), done: parseFloat(done.toFixed(1)), percent: Math.min(Math.round((done / total) * 100) || 0, 100) };
+            
+            // ✅ 修改逻辑：进度页是“长期看板”
+            // 只要 【累计工时 < 目标工时】，它就永远属于“进行中”，不管今天有没有打勾
+            const activeProgressTasks = computed(() => {
+                return progressTasks.value.filter(t => (t.accumulated || 0) < t.duration);
             });
+
+            // 只有 【累计工时 >= 目标工时】，才算真正的“结项/已完成”
+            const completedProgressTasks = computed(() => {
+                return progressTasks.value.filter(t => (t.accumulated || 0) >= t.duration);
+            });
+
+            // ⬇️⬇️⬇️ 【修改】进度页统计逻辑：只看总投入时长 + 达成项目数 ⬇️⬇️⬇️
+            const progressStats = computed(() => {
+                // 筛选出所有设定了工时的“长期项目”
+                const allProjs = tasks.value.filter(t => t.duration > 0);
+                
+                // 1. 算出总共投入的时间 (Accumulated Total)
+                const totalHours = allProjs.reduce((sum, t) => sum + (t.accumulated || 0), 0);
+                
+                // 2. 算出有多少个项目已经达标 (Accumulated >= Duration)
+                const finishedCount = allProjs.filter(t => (t.accumulated || 0) >= t.duration).length;
+                
+                return {
+                    hours: totalHours.toFixed(1), // 总投入小时
+                    doneCount: finishedCount,     // 已达标个数
+                    totalCount: allProjs.length   // 总项目数
+                };
+            });
+            // ⬆️⬆️⬆️ 补回到这里 ⬆️⬆️⬆️
 
             // --- 其他 Helpers ---
             let pressTimer = null;
@@ -2034,7 +2182,15 @@ const handleSync = async (direction) => {
             };
 
 
-            const jumpToToday = () => { const t = new Date(); currentYear.value = t.getFullYear(); currentMonth.value = t.getMonth(); selectedDate.value = t; };
+            const jumpToToday = () => { 
+                const t = new Date(); 
+                currentYear.value = t.getFullYear(); 
+                currentMonth.value = t.getMonth(); 
+                selectedDate.value = t; 
+                
+                // ✅ 手动触发一次滚动，确保万无一失
+                scrollToSelected();
+            };
             const selectDate = (day) => selectedDate.value = day.date;
             const isSameDate = (d1, d2) => d1.getDate()===d2.getDate() && d1.getMonth()===d2.getMonth() && d1.getFullYear()===d2.getFullYear();
             const getDayClass = (day) => {
@@ -2210,20 +2366,30 @@ const handleSync = async (direction) => {
                 }, 100);
             };
 
-            // ✅ 新增：保存工时
+            // ✅ 修复：保存工时并正确记录差值日志
             const saveTaskProgress = () => {
                 const task = tasks.value.find(t => t.id === progressForm.taskId);
                 if (task) {
-                    const val = parseFloat(progressForm.hours);
-                    if (!isNaN(val) && val >= 0) {
-                        task.accumulated = val;
-                        // 记录日志
-                        if(!task.log) task.log = [];
-                        task.log.unshift({
-                            date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}),
-                            duration: 0, 
-                            note: '手动调整'
-                        });
+                    const newVal = parseFloat(progressForm.hours);
+                    const oldVal = task.accumulated || 0;
+                    
+                    if (!isNaN(newVal) && newVal >= 0) {
+                        // 1. 计算差值（新值 - 旧值）
+                        const diff = newVal - oldVal;
+                        
+                        // 2. 更新总工时
+                        task.accumulated = newVal;
+                        
+                        // 3. 只有数值真的变了，才记录日志
+                        // (忽略极小的浮点数误差)
+                        if (Math.abs(diff) > 0.001) { 
+                            if(!task.log) task.log = [];
+                            task.log.unshift({
+                                date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}),
+                                duration: diff, // ✅ 这里记录差值，不再是 0
+                                note: '手动调整'
+                            });
+                        }
                     }
                 }
                 showProgressModal.value = false;
@@ -2284,6 +2450,50 @@ const handleSync = async (direction) => {
                 currentOffsetX.value = 0;
             };
 
+            // --- 🔄 新增：刷新页面的逻辑 ---
+            
+            // 方案A: 双击 Logo 刷新
+            // 使用时间差判断双击，比 @dblclick 在手机上反应更快
+            const lastLogoTap = ref(0);
+            const handleLogoClick = () => {
+                const now = Date.now();
+                if (now - lastLogoTap.value < 300) {
+                    // 300ms 内点击了第二次 -> 触发刷新
+                    if(navigator.vibrate) navigator.vibrate(50); // 震动反馈
+                    window.location.reload();
+                } else {
+                    lastLogoTap.value = now;
+                }
+            };
+
+            // 方案B: 专注图标连点 5 下刷新
+            let focusTapCount = 0;
+            let focusTapTimer = null;
+            
+            const handleFocusTabClick = () => {
+                // 1. 如果当前已经是专注页，才开始计数
+                if (currentTab.value === 'now') {
+                    focusTapCount++;
+                    
+                    // 清除重置计时器
+                    clearTimeout(focusTapTimer);
+                    
+                    // 如果 500ms 内没有下一次点击，重置计数
+                    focusTapTimer = setTimeout(() => {
+                        focusTapCount = 0;
+                    }, 500);
+
+                    if (focusTapCount >= 5) {
+                        if(navigator.vibrate) navigator.vibrate([50, 50, 50]); // 震动3下提示
+                        window.location.reload();
+                        focusTapCount = 0;
+                    }
+                }
+                
+                // 2. 无论如何，先切换到专注页
+                currentTab.value = 'now';
+            };
+
             // --- 从第 1375 行开始完全替换至结尾 ---
             return {
                 // ... 你原有的其他变量 ...
@@ -2330,8 +2540,9 @@ const handleSync = async (direction) => {
                 handleSwipeStart,
                 handleSwipeMove,
                 handleSwipeEnd,
-                handleTileClick, editTaskProgress, handleProgressItemClick
-                
+                handleTileClick, editTaskProgress, handleProgressItemClick,
+                handleLogoClick,      // 👈 导出这个
+                handleFocusTabClick, 
 
             }; // 结束 return
         } // 结束 setup
