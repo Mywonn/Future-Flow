@@ -394,8 +394,8 @@
                     <div v-for="task in activeRecurringQuadrantTasks" :key="task.id" 
                         class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm mb-2.5 overflow-hidden transition-all duration-300 ring-1 ring-gray-100/50 dark:ring-white/5 hover:shadow-md relative group">
                         
-                        <div class="absolute top-0 right-16 text-[56px] font-black opacity-10 select-none z-10"
-                             :class="{'text-red-500': task.q===1, 'text-blue-500': task.q===2, 'text-yellow-500': task.q===3}">
+                        <div class="absolute top-[-6px] right-14 w-24 text-left text-[56px] font-black opacity-[0.06] select-none pointer-events-none"
+                            :class="{'text-red-500': task.q===1, 'text-blue-500': task.q===2, 'text-yellow-500': task.q===3}">
                             Q{{ task.q }}
                         </div>
 
