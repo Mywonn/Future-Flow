@@ -24,7 +24,8 @@
     <script>
         // 立即执行：在页面渲染前判断主题，防止白屏闪烁
         try {
-            const savedTheme = localStorage.getItem('mike_theme');
+            // ✅ 修改 key 名，强制重置为跟随系统
+            const savedTheme = localStorage.getItem('future_flow_theme');
             const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
                 document.documentElement.classList.add('dark');
@@ -229,7 +230,10 @@
             <div class="px-4 pt-3 pb-1 flex justify-between items-center relative">
                 
                 <div class="flex justify-start items-center" @click="handleLogoClick">
-                    <img src="img/logo.png" alt="Logo" class="w-8 h-8 object-contain rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 shadow-sm active:scale-90 transition-transform duration-200">
+                    <img src="img/logo.png" 
+                    alt="Logo" 
+                    class="w-8 h-8 object-contain rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 shadow-sm transition-transform duration-200"
+                    :class="{'scale-75': isLogoAnimating}">
                 </div>
 
                 <div class="absolute left-1/2 -translate-x-1/2 z-50">
@@ -1206,33 +1210,46 @@
                 
                 if (isDark.value) {
                     html.classList.add('dark');
-                    localStorage.setItem('mike_theme', 'dark');
-                    // 更新浏览器顶栏颜色（夜间更深）
+                    localStorage.setItem('future_flow_theme', 'dark'); // ✅ 改名
                     themeColorMeta.setAttribute('content', '#1f2937'); 
                 } else {
                     html.classList.remove('dark');
-                    localStorage.setItem('mike_theme', 'light');
+                    localStorage.setItem('future_flow_theme', 'light'); // ✅ 改名
                     themeColorMeta.setAttribute('content', '#2563eb');
                 }
             };
-
+            // --- 持久化 & 初始化 ---
             // --- 持久化 & 初始化 ---
             onMounted(() => {
-                // 1. 读取数据
-                const savedTheme = localStorage.getItem('mike_theme');
-                // ... (中间的主题代码保持不变) ...
+                // 1. 读取数据 (使用新 Key)
+                const savedTheme = localStorage.getItem('future_flow_theme'); 
+                const systemDarkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                const systemDark = systemDarkQuery.matches; // 👈 这里已经定义过一次了
 
-                const savedTasks = localStorage.getItem('mike-pro-tasks-v4');
-                const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                // 初始化判断
                 if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
                     isDark.value = true;
                 } else {
                     isDark.value = false;
                 }
+                updateTheme();
+
+                // ✅ 实时监听
+                systemDarkQuery.addEventListener('change', (e) => {
+                    console.log('系统主题发生变化，自动跟随...');
+                    isDark.value = e.matches; // 1. 强制同步系统状态
+                    updateTheme();            // 2. 更新界面并刷新本地存储
+                });
+
+                const savedTasks = localStorage.getItem('mike-pro-tasks-v4');
+                
+                // 🚨 注意：刚才让你删除的代码就在这里，删掉后直接接下面这行：
                 if (savedTasks) tasks.value = JSON.parse(savedTasks);
                 
                 const savedCountdowns = localStorage.getItem('mike-pro-countdowns-v4');
                 if (savedCountdowns) countdowns.value = JSON.parse(savedCountdowns);
+
+                // ... 后面的代码保持不变 ...
 
                 const savedToken = localStorage.getItem('mike_github_token');
                 if(savedToken) githubToken.value = savedToken;
@@ -1853,20 +1870,35 @@ const handleSync = async (direction) => {
                 clearTimeout(pressTimer);
             };
 
-            // ✅ 修改：实现手风琴效果，一次仅展开一个
+            // ✅ 修改 handleTaskClick：支持双击修改工时，单击展开
+            let taskClickTimer = null; // 用于存储单击的延时器
+
             const handleTaskClick = (task) => {
                 if (isLongPress || isScrolling) return;
+
+                const now = Date.now();
                 
-                // 如果当前任务准备展开（原本是收起状态）
-                if (!task.expanded) {
-                    // 遍历所有任务，把它们的展开状态全部设为 false
-                    tasks.value.forEach(t => {
-                        t.expanded = false;
-                    });
+                // 1. 判断是否双击 (间隔 < 300ms)
+                if (lastTap.value.id === task.id && (now - lastTap.value.time) < 300) {
+                    // --- 双击逻辑：修改工时 ---
+                    clearTimeout(taskClickTimer); // 马上取消刚才那个准备执行的单击动作
+                    editTaskProgress(task);       // 唤起修改工时弹窗 (和你进度页用的是同一个函数)
+                    lastTap.value = { id: null, time: 0 }; // 重置状态
+                } else {
+                    // --- 单击逻辑：手风琴展开/收起 ---
+                    lastTap.value = { id: task.id, time: now };
+                    
+                    // 延迟 300ms 执行展开，给双击留出反应时间
+                    taskClickTimer = setTimeout(() => {
+                        // 原有的手风琴逻辑
+                        if (!task.expanded) {
+                            tasks.value.forEach(t => {
+                                t.expanded = false;
+                            });
+                        }
+                        task.expanded = !task.expanded;
+                    }, 300);
                 }
-                
-                // 切换当前任务的状态
-                task.expanded = !task.expanded;
             };
 
             // --- 新增：安全地点击背景收起键盘 ---
@@ -2455,11 +2487,19 @@ const handleSync = async (direction) => {
             // 方案A: 双击 Logo 刷新
             // 使用时间差判断双击，比 @dblclick 在手机上反应更快
             const lastLogoTap = ref(0);
+            const isLogoAnimating = ref(false); // 1. 新增控制变量
+
             const handleLogoClick = () => {
+                // 2. 无论单击双击，先触发“Q弹”动画
+                isLogoAnimating.value = true;
+                // 200毫秒后自动还原，形成“缩放-还原”的完整视觉过程
+                setTimeout(() => {
+                    isLogoAnimating.value = false;
+                }, 200);
+
                 const now = Date.now();
                 if (now - lastLogoTap.value < 300) {
-                    // 300ms 内点击了第二次 -> 触发刷新
-                    if(navigator.vibrate) navigator.vibrate(50); // 震动反馈
+                    if(navigator.vibrate) navigator.vibrate(50); 
                     window.location.reload();
                 } else {
                     lastLogoTap.value = now;
@@ -2541,6 +2581,7 @@ const handleSync = async (direction) => {
                 handleSwipeMove,
                 handleSwipeEnd,
                 handleTileClick, editTaskProgress, handleProgressItemClick,
+                isLogoAnimating,
                 handleLogoClick,      // 👈 导出这个
                 handleFocusTabClick, 
 
