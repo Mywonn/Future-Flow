@@ -379,9 +379,9 @@
                     <div class="relative mr-1 h-full flex items-center">
                         <select v-model="newDuration" 
                                 class="appearance-none bg-white dark:bg-gray-600 dark:text-white text-xs px-2.5 py-1.5 rounded-xl outline-none text-center text-gray-600 font-bold shadow-sm focus:text-blue-600 transition-colors">
-                            <option value="" disabled selected>h</option>
-                            <option v-for="h in [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8]" :key="h" :value="h">
-                                {{ h }}
+                            <option value="" disabled selected>min</option>
+                            <option v-for="m in [15, 30, 45, 60, 90, 120, 180]" :key="m" :value="m">
+                                {{ m }}
                             </option>
                         </select>
                     </div>
@@ -986,8 +986,8 @@
                     </div>
                     
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between">
-                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (小时)</span>
-                        <input v-model="editForm.duration" type="number" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (分钟)</span>
+                        <input v-model="quadrantForm.duration" type="number" placeholder="30" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
                     </div>
 
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between space-x-2">
@@ -1093,8 +1093,8 @@
                     </div>
                     
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between">
-                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (小时)</span>
-                        <input v-model="quadrantForm.duration" type="number" placeholder="0" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (分钟)</span>
+                        <input v-model="editForm.duration" type="number" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
                     </div>
 
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between space-x-2">
@@ -1170,18 +1170,26 @@
             </div>
             
             <div class="p-5 text-center">
-                <div class="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate px-2">
+                <div class="mb-4">
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate px-2 mb-1">
                     任务: <span class="font-bold text-gray-700 dark:text-gray-300">{{ progressForm.taskText }}</span>
                 </div>
+                <div class="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700/50 py-1 rounded-lg inline-block px-3">
+                    当前累计: <span class="font-mono font-bold text-blue-500">{{ (tasks.find(t=>t.id===progressForm.taskId)?.accumulated || 0).toFixed(1) }}h</span>
+                </div>
+            </div>
+
+            
                 
                 <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-xl px-4 py-3 mx-4 mb-4 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-gray-800 transition-all">
                     <input ref="progressInputRef" 
                            v-model="progressForm.hours" 
                            type="number" 
-                           step="0.5" 
-                           class="w-20 bg-transparent text-2xl font-bold text-blue-600 dark:text-blue-400 outline-none text-center"
+                           step="1" 
+                           placeholder="新增分钟" 
+                           class="w-24 bg-transparent text-2xl font-bold text-blue-600 dark:text-blue-400 outline-none text-center placeholder-gray-300 dark:placeholder-gray-600"
                            @keyup.enter="saveTaskProgress">
-                    <span class="text-sm text-gray-400 font-bold ml-1 pt-1">h</span>
+                    <span class="text-sm text-gray-400 font-bold ml-1 pt-1">min</span>
                 </div>
 
                 <button @click="saveTaskProgress" class="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 active:scale-95 transition-transform">
@@ -1649,7 +1657,8 @@ const handleSync = async (direction) => {
                 if (!newTask.value.trim()) return;
                 let duration = 0;
                 if (newDuration.value) {
-                    duration = Math.abs(parseFloat(newDuration.value));
+                    // ✅ 修改：输入的 newDuration 是分钟，除以 60 转为小时存进去
+                    duration = Math.abs(parseFloat(newDuration.value)) / 60;
                 }
                 
                 // ❌ 原代码：const today = getTodayStr(); 
@@ -1736,7 +1745,8 @@ const handleSync = async (direction) => {
                 if (!quadrantForm.text.trim()) { alert("请输入任务内容"); return; }
                 
                 let duration = 0;
-                if (quadrantForm.duration) duration = Math.abs(parseFloat(quadrantForm.duration));
+                // ✅ 修改：输入的分钟 / 60 = 小时
+                if (quadrantForm.duration) duration = Math.abs(parseFloat(quadrantForm.duration)) / 60;
 
                 tasks.value.push({
                     id: Date.now(), 
@@ -1781,7 +1791,7 @@ const handleSync = async (direction) => {
             const openEditModal = (task) => {
                 editingTask.value = task;
                 editForm.text = task.text;
-                editForm.duration = task.duration || '';
+                editForm.duration = task.duration ? Math.round(task.duration * 60) : '';
                 
                 // 修改：如果任务没有日期，默认填入今天
                 const today = getTodayStr();
@@ -1801,7 +1811,7 @@ const handleSync = async (direction) => {
                 if (!editForm.text.trim()) { alert("内容不能为空"); return; }
 
                 editingTask.value.text = editForm.text;
-                editingTask.value.duration = editForm.duration ? Math.abs(parseFloat(editForm.duration)) : 0;
+                editingTask.value.duration = editForm.duration ? Math.abs(parseFloat(editForm.duration)) / 60 : 0;
                 editingTask.value.startDate = editForm.startDate;
                 editingTask.value.endDate = editForm.endDate;
                 editingTask.value.repeat = editForm.repeat;
@@ -2386,10 +2396,11 @@ const handleSync = async (direction) => {
             };
 
             // ✅ 修改：唤起自定义弹窗，而不是 ugly prompt
+            // ✅ 修改 1：打开弹窗时，输入框留空，不再显示总数
             const editTaskProgress = (task) => {
                 progressForm.taskId = task.id;
                 progressForm.taskText = task.text;
-                progressForm.hours = task.accumulated || 0;
+                progressForm.hours = ''; // 👈 关键：设为空，方便直接输入新增量
                 showProgressModal.value = true;
                 
                 // 自动聚焦
@@ -2398,30 +2409,29 @@ const handleSync = async (direction) => {
                 }, 100);
             };
 
-            // ✅ 修复：保存工时并正确记录差值日志
+            // ✅ 修改 2：保存时，执行“累加”逻辑
             const saveTaskProgress = () => {
                 const task = tasks.value.find(t => t.id === progressForm.taskId);
                 if (task) {
-                    const newVal = parseFloat(progressForm.hours);
-                    const oldVal = task.accumulated || 0;
+                    // ✅ 修改：获取输入的“分钟”，然后除以 60 转成小时
+                    const inputMin = parseFloat(progressForm.hours);
                     
-                    if (!isNaN(newVal) && newVal >= 0) {
-                        // 1. 计算差值（新值 - 旧值）
-                        const diff = newVal - oldVal;
+                    if (!isNaN(inputMin) && inputMin !== 0) {
+                        const addedHours = inputMin / 60; // 核心转换
                         
-                        // 2. 更新总工时
-                        task.accumulated = newVal;
+                        // 1. 更新总工时 (依然是小时)
+                        if (!task.accumulated) task.accumulated = 0;
+                        task.accumulated += addedHours;
                         
-                        // 3. 只有数值真的变了，才记录日志
-                        // (忽略极小的浮点数误差)
-                        if (Math.abs(diff) > 0.001) { 
-                            if(!task.log) task.log = [];
-                            task.log.unshift({
-                                date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}),
-                                duration: diff, // ✅ 这里记录差值，不再是 0
-                                note: '手动调整'
-                            });
-                        }
+                        if (task.accumulated < 0) task.accumulated = 0;
+                        
+                        // 2. 记录日志 (记录的是小时，这样显示的时候还是 +0.5h)
+                        if(!task.log) task.log = [];
+                        task.log.unshift({
+                            date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}),
+                            duration: addedHours, // 👈 存进去的是小时
+                            note: '手动调整'
+                        });
                     }
                 }
                 showProgressModal.value = false;
