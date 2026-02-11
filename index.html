@@ -2383,32 +2383,48 @@ const handleSync = async (direction) => {
                 return { days, targetDateStr: `${y}-${m}-${d}` };
             };
 
-            // --- Move: 把这个函数移到这里，与上面并列 ---
+            // ✅ 修复版：正确处理重复任务的结束日期
             const getTasksByQ = (q) => {
                 const sel = new Date(selectedDate.value);
                 sel.setHours(0,0,0,0);
                 const selTime = sel.getTime();
 
                 return tasks.value.filter(t => {
+                    // 1. 基础筛选
                     if (t.q !== q) return false;
+                    
+                    // 如果没设置任何日期，总是显示
                     if (!t.startDate && !t.endDate) return true;
 
                     let startOk = true;
                     let endOk = true;
 
+                    // 2. 开始日期检查
                     if (t.startDate) {
                         const s = new Date(t.startDate);
                         s.setHours(0,0,0,0);
-                        // 提前3天显示
+                        // 提前3天显示 (预告)
                         const buffer = 3 * 24 * 60 * 60 * 1000; 
                         if (selTime < (s.getTime() - buffer)) startOk = false;
                     }
 
-                    if (t.endDate && t.done) { // ✅ 修改：只有任务已完成，且超过了结束日期，才隐藏
-                    const e = new Date(t.endDate);
-                    e.setHours(0,0,0,0);
-                    if (selTime > e.getTime()) endOk = false;
-                }
+                    // 3. 结束日期检查 (核心修改)
+                    if (t.endDate) {
+                        const e = new Date(t.endDate);
+                        e.setHours(0,0,0,0);
+                        
+                        // 🔴 关键分歧点：
+                        if (t.repeat && t.repeat !== 'none') {
+                            // Situation A: 重复任务
+                            // 逻辑：严格遵守结束日期。只要当前查看的日期 > 结束日期，一律不显示。
+                            if (selTime > e.getTime()) endOk = false;
+                        } else {
+                            // Situation B: 一次性任务
+                            // 逻辑：为了防遗忘，只有“已完成”且“过期”的任务才隐藏。
+                            // (如果过期了但没做，还要留着提醒你)
+                            if (t.done && selTime > e.getTime()) endOk = false;
+                        }
+                    }
 
                     return startOk && endOk;
                 });
