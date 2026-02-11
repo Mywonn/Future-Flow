@@ -1029,21 +1029,48 @@
                             <input v-model="editForm.startDate" type="date" class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white">
                         </div>
                         <span class="text-gray-300 pt-4">-</span>
-                        <div class="flex-1">
+                        <div class="flex-1 relative">
                             <label class="block text-[10px] text-gray-400 mb-1">结束 (选填)</label>
-                            <input v-model="editForm.endDate" type="date" class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white">
+                            <input v-model="editForm.endDate" type="date" 
+                                :disabled="editForm.isLongTerm"
+                                :class="{'opacity-50 cursor-not-allowed bg-gray-200 dark:bg-gray-700': editForm.isLongTerm}"
+                                class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white transition-all">
+                            
+                            <div v-if="!editForm.isLongTerm && editForm.repeat !== 'none' && !editForm.endDate" 
+                                class="absolute -bottom-3 left-0 text-[9px] text-orange-500 font-medium animate-pulse">
+                                ↑ 请选择结束日期
+                            </div>
                         </div>
                     </div>
 
                     <div class="py-3 flex justify-between items-center">
                         <span class="text-sm text-gray-800 dark:text-gray-300">重复</span>
-                        <select v-model="editForm.repeat" class="bg-transparent text-gray-500 dark:text-gray-300 text-sm outline-none dir-rtl appearance-none text-right pr-4 cursor-pointer">
-                            <option value="none">不重复</option>
-                            <option value="day">每天</option>
-                            <option value="week">每周</option>
-                            <option value="month">每月</option>
-                            <option value="year">每年</option>
-                        </select>
+                        <div class="flex items-center space-x-2">
+    
+                            <label v-if="editForm.repeatInterval > 1 && editForm.repeat !== 'none'" 
+                                    class="flex items-center space-x-1 cursor-pointer bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-fade-in">
+                                <input type="checkbox" v-model="editForm.isLongTerm" 
+                                        @change="editForm.isLongTerm ? editForm.endDate = '' : null"
+                                        class="accent-blue-600 w-3 h-3">
+                                <span class="text-xs text-blue-600 dark:text-blue-400 font-bold">长期</span>
+                            </label>
+
+                            <div v-if="editForm.repeat !== 'none'" class="flex items-center bg-gray-100 dark:bg-gray-600 rounded px-2 py-0.5 transition-all">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">每</span>
+                                <input v-model="editForm.repeatInterval" 
+                                    @input="editForm.repeatInterval < 2 ? editForm.isLongTerm = false : null"
+                                    type="number" min="1" 
+                                    class="w-8 bg-transparent text-center text-sm font-bold text-blue-600 dark:text-blue-400 outline-none border-none p-0">
+                            </div>
+
+                            <select v-model="editForm.repeat" class="bg-transparent text-gray-500 dark:text-gray-300 text-sm outline-none dir-rtl appearance-none text-right pr-4 cursor-pointer">
+                                <option value="none">不重复</option>
+                                <option value="day">天</option>
+                                <option value="week">周</option>
+                                <option value="month">月</option>
+                                <option value="year">年</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -1136,21 +1163,47 @@
                             <input v-model="quadrantForm.startDate" type="date" class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white">
                         </div>
                         <span class="text-gray-300 pt-4">-</span>
-                        <div class="flex-1">
-                            <label class="block text-[10px] text-gray-400 mb-1">结束日期</label>
-                            <input v-model="quadrantForm.endDate" type="date" class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white">
+                        <div class="flex-1 relative"> <label class="block text-[10px] text-gray-400 mb-1">结束日期</label>
+                            <input v-model="quadrantForm.endDate" type="date" 
+                                :disabled="quadrantForm.isLongTerm"
+                                :class="{'opacity-50 cursor-not-allowed bg-gray-200 dark:bg-gray-700': quadrantForm.isLongTerm}"
+                                class="w-full bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-xs outline-none text-gray-600 dark:text-white transition-all">
+                            
+                            <div v-if="!quadrantForm.isLongTerm && quadrantForm.repeat !== 'none' && !quadrantForm.endDate" 
+                                class="absolute -bottom-3 left-0 text-[9px] text-orange-500 font-medium animate-pulse">
+                                ↑ 请选择结束日期
+                            </div>
                         </div>
                     </div>
 
                     <div class="py-3 flex justify-between items-center">
                         <span class="text-sm text-gray-800 dark:text-gray-300">重复</span>
-                        <select v-model="quadrantForm.repeat" class="bg-transparent text-gray-500 dark:text-gray-300 text-sm outline-none dir-rtl appearance-none text-right pr-4 cursor-pointer">
-                            <option value="none">不重复</option>
-                            <option value="day">每天</option>
-                            <option value="week">每周</option>
-                            <option value="month">每月</option>
-                            <option value="year">每年</option>
-                        </select>
+                        <div class="flex items-center space-x-2">
+                            
+                            <label v-if="quadrantForm.repeatInterval > 1 && quadrantForm.repeat !== 'none'" 
+                                    class="flex items-center space-x-1 cursor-pointer bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-fade-in">
+                                <input type="checkbox" v-model="quadrantForm.isLongTerm" 
+                                        @change="quadrantForm.isLongTerm ? quadrantForm.endDate = '' : null"
+                                        class="accent-blue-600 w-3 h-3">
+                                <span class="text-xs text-blue-600 dark:text-blue-400 font-bold">长期</span>
+                            </label>
+                            
+                            <div v-if="quadrantForm.repeat !== 'none'" class="flex items-center bg-gray-100 dark:bg-gray-600 rounded px-2 py-0.5 transition-all">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">每</span>
+                                <input v-model="quadrantForm.repeatInterval" 
+                                        @input="quadrantForm.repeatInterval < 2 ? quadrantForm.isLongTerm = false : null"
+                                        type="number" min="1" 
+                                        class="w-8 bg-transparent text-center text-sm font-bold text-blue-600 dark:text-blue-400 outline-none border-none p-0">
+                            </div>
+
+                            <select v-model="quadrantForm.repeat" class="bg-transparent text-gray-500 dark:text-gray-300 text-sm outline-none dir-rtl appearance-none text-right pr-4 cursor-pointer">
+                                <option value="none">不重复</option>
+                                <option value="day">天</option>
+                                <option value="week">周</option>
+                                <option value="month">月</option>
+                                <option value="year">年</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1746,8 +1799,9 @@ const handleSync = async (direction) => {
 
             // 1. 定义【新建任务】的弹窗状态和表单
             const showQuadrantModal = ref(false);
-            const quadrantForm = reactive({ q: 1, text: '', duration: '', startDate: '', endDate: '', repeat: 'none' });
-
+            // ✅ 修改：增加 isLongTerm 字段
+            const quadrantForm = reactive({ q: 1, text: '', duration: '', startDate: '', endDate: '', repeat: 'none', repeatInterval: 1, isLongTerm: false });
+            const editForm = reactive({ text: '', duration: '', startDate: '', endDate: '', repeat: 'none', repeatInterval: 1, isLongTerm: false });
             // (注意：这里的 getTodayStr 定义已被移除，直接使用上面的)
 
             // 打开新建弹窗
@@ -1768,6 +1822,8 @@ const handleSync = async (direction) => {
                 quadrantForm.endDate = dateStr;   // 默认结束日期 = 选中日期
                 
                 quadrantForm.repeat = 'none';
+                quadrantForm.repeatInterval = 1;
+                quadrantForm.isLongTerm = false;
                 showQuadrantModal.value = true;
             };
 
@@ -1789,8 +1845,9 @@ const handleSync = async (direction) => {
                     q: quadrantForm.q, 
                     duration: duration,
                     startDate: quadrantForm.startDate,
-                    endDate: quadrantForm.endDate,
+                    endDate: quadrantForm.isLongTerm ? '' : quadrantForm.endDate,
                     repeat: quadrantForm.repeat, 
+                    repeatInterval: quadrantForm.repeatInterval || 1,
                     accumulated: 0, 
                     log: [], 
                     expanded: false,
@@ -1817,8 +1874,7 @@ const handleSync = async (direction) => {
             };
             const deleteTask = (id) => tasks.value = tasks.value.filter(t => t.id !== id);
 
-            // 2. 定义【编辑任务】的表单
-            const editForm = reactive({ text: '', duration: '', startDate: '', endDate: '', repeat: 'none' });
+            
 
             // 打开【编辑弹窗】
             const openEditModal = (task) => {
@@ -1832,6 +1888,15 @@ const handleSync = async (direction) => {
                 editForm.endDate = task.endDate || today;
                 
                 editForm.repeat = task.repeat || 'none';
+                editForm.repeatInterval = task.repeatInterval || 1;
+                // ✅ 核心逻辑：如果 没有结束日期 且 重复，则视为“长期”
+                // 注意：如果 endDate 是空字符串或者 null，就代表长期
+                if (task.repeat !== 'none' && !task.endDate) {
+                    editForm.isLongTerm = true;
+                    editForm.endDate = ''; // 确保显示为空
+                } else {
+                    editForm.isLongTerm = false;
+                }
             };
 
             const closeEditModal = () => {
@@ -1846,9 +1911,9 @@ const handleSync = async (direction) => {
                 editingTask.value.text = editForm.text;
                 editingTask.value.duration = editForm.duration ? Math.abs(parseFloat(editForm.duration)) : 0;
                 editingTask.value.startDate = editForm.startDate;
-                editingTask.value.endDate = editForm.endDate;
+                editingTask.value.endDate = editForm.isLongTerm ? '' : editForm.endDate;
                 editingTask.value.repeat = editForm.repeat;
-                
+                editingTask.value.repeatInterval = editForm.repeatInterval || 1;
                 closeEditModal();
             };
 
@@ -2018,39 +2083,25 @@ const handleSync = async (direction) => {
                 return tasks.value.filter(t => t.q === 0 && t.date === key && isTaskDone(t, selectedDate.value));
             });
 
-            // ⬇️⬇️⬇️ 新增代码开始：筛选 Q1-Q3 的重复任务 ⬇️⬇️⬇️
+            
+            // ✅ 修复版：专注页的循环任务
             const activeRecurringQuadrantTasks = computed(() => {
-                // 必须基于选中的日期（通常是今天）
-                const sel = new Date(selectedDate.value); 
-                sel.setHours(0, 0, 0, 0);
-                const selTime = sel.getTime();
-
                 return tasks.value.filter(t => {
-                    // 1. 必须是 Q1, Q2, Q3 (排除 Q0 和 Q4)
+                    // 1. 必须是 Q1-Q3
                     if (![1, 2, 3].includes(t.q)) return false;
                     
-                    // 2. 必须是重复任务 (repeat !== 'none')
+                    // 2. 必须是重复任务
                     if (!t.repeat || t.repeat === 'none') return false;
 
-                    // 3. 必须是“今日未完成” (利用现有的 isTaskDone 逻辑)
+                    // 3. 今日未完成
                     if (isTaskDone(t, selectedDate.value)) return false;
 
-                    // 4. 日期范围检查 (确保任务已开始且未结束)
-                    if (t.startDate) {
-                        const s = new Date(t.startDate);
-                        s.setHours(0, 0, 0, 0);
-                        if (selTime < s.getTime()) return false; // 还没到开始日期
-                    }
-                    if (t.endDate) {
-                        const e = new Date(t.endDate);
-                        e.setHours(0, 0, 0, 0);
-                        if (selTime > e.getTime()) return false; // 已经过期
-                    }
+                    // 4. ✅ 使用新的可见性判断 (支持间隔重复)
+                    return checkTaskVisible(t, selectedDate.value);
 
-                    return true;
-                }).sort((a, b) => a.q - b.q); // 按优先级 1->2->3 排序
+                }).sort((a, b) => a.q - b.q);
             });
-            // ⬆️⬆️⬆️ 新增代码结束 ⬆️⬆️⬆️
+           
 
             // --- 约 1220 行，在 completedInboxTasks 之后插入 ---
 
@@ -2314,6 +2365,73 @@ const handleSync = async (direction) => {
                 }
                 return task.done;
             };
+            // ✅ 核心算法：判断任务在指定日期是否可见（支持间隔重复）
+            const checkTaskVisible = (task, targetDateObj) => {
+                // 1. 如果没有设置重复，且没有设置日期，或者日期就是今天 -> 显示
+                if (!task.repeat || task.repeat === 'none') {
+                     // 如果是一次性任务，这里只负责日期匹配，外部逻辑负责过期隐藏
+                    return true; 
+                }
+
+                // 2. 如果没有开始日期，默认从创建那天算起（但为了稳妥，这里建议必须有 startDate）
+                // 如果用户没填 startDate，我们默认视为“今天可见”
+                if (!task.startDate) return true;
+
+                // --- 统一时间为凌晨 00:00:00 以便比较 ---
+                const target = new Date(targetDateObj);
+                target.setHours(0, 0, 0, 0);
+                
+                const start = new Date(task.startDate);
+                start.setHours(0, 0, 0, 0);
+
+                const end = task.endDate ? new Date(task.endDate) : null;
+                if (end) end.setHours(0, 0, 0, 0);
+
+                const targetTime = target.getTime();
+                const startTime = start.getTime();
+
+                // 3. 基础范围检查
+                if (targetTime < startTime) return false; // 还没开始
+                if (end && targetTime > end.getTime()) return false; // 已经结束 (一直重复 = 没有 end)
+
+                // 4. 间隔算法
+                const interval = parseInt(task.repeatInterval || 1);
+                
+                if (task.repeat === 'day') {
+                    // 计算相差天数
+                    const diffDays = Math.floor((targetTime - startTime) / (24 * 60 * 60 * 1000));
+                    // 只要天数差能被间隔整除，就显示
+                    // 例如：每2天。第0天显示，第1天隐藏，第2天显示...
+                    return diffDays % interval === 0;
+                }
+                
+                if (task.repeat === 'week') {
+                    const diffWeeks = Math.floor((targetTime - startTime) / (7 * 24 * 60 * 60 * 1000));
+                    // 必须满足两个条件：
+                    // A. 必须是同一个星期几 (getDay 相同)
+                    // B. 必须是间隔的周数 (diffWeeks % interval === 0)
+                    return target.getDay() === start.getDay() && (diffWeeks % interval === 0);
+                }
+
+                if (task.repeat === 'month') {
+                    // 计算月份差
+                    let diffMonths = (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
+                    // 逻辑同上：
+                    // A. 日期号数必须相同 (比如都是15号)
+                    // B. 月份差能被整除
+                    return target.getDate() === start.getDate() && (diffMonths % interval === 0);
+                }
+
+                if (task.repeat === 'year') {
+                    const diffYears = target.getFullYear() - start.getFullYear();
+                    // A. 月份和日期必须相同
+                    // B. 年份差能被整除
+                    const isSameDate = target.getMonth() === start.getMonth() && target.getDate() === start.getDate();
+                    return isSameDate && (diffYears % interval === 0);
+                }
+
+                return true;
+            };
             const hasTask = (date) => { const key = formatDateKey(date); return tasks.value.some(t => t.date === key && !t.done); };
             // --- 核心升级：支持农历和重复周期的计算 ---
             // --- 核心升级：支持农历和重复周期的计算 ---
@@ -2385,49 +2503,36 @@ const handleSync = async (direction) => {
             };
 
             // ✅ 修复版：正确处理重复任务的结束日期
+            // ✅ 修复版：四象限的任务获取
             const getTasksByQ = (q) => {
+                // 预处理选中的日期
                 const sel = new Date(selectedDate.value);
                 sel.setHours(0,0,0,0);
                 const selTime = sel.getTime();
 
                 return tasks.value.filter(t => {
-                    // 1. 基础筛选
                     if (t.q !== q) return false;
+
+                    // A. 如果是重复任务，走新的间隔算法
+                    if (t.repeat && t.repeat !== 'none') {
+                         return checkTaskVisible(t, selectedDate.value);
+                    }
                     
-                    // 如果没设置任何日期，总是显示
-                    if (!t.startDate && !t.endDate) return true;
-
-                    let startOk = true;
-                    let endOk = true;
-
-                    // 2. 开始日期检查
+                    // B. 如果是一次性任务，走旧逻辑 (为了显示逾期任务)
+                    // 1. 开始日期检查
                     if (t.startDate) {
                         const s = new Date(t.startDate);
                         s.setHours(0,0,0,0);
-                        // 提前3天显示 (预告)
-                        const buffer = 3 * 24 * 60 * 60 * 1000; 
-                        if (selTime < (s.getTime() - buffer)) startOk = false;
+                        if (selTime < (s.getTime() - 3 * 24 * 60 * 60 * 1000)) return false; // 提前3天显示
                     }
-
-                    // 3. 结束日期检查 (核心修改)
+                    // 2. 结束日期检查 (仅当已完成且过期时隐藏)
                     if (t.endDate) {
                         const e = new Date(t.endDate);
                         e.setHours(0,0,0,0);
-                        
-                        // 🔴 关键分歧点：
-                        if (t.repeat && t.repeat !== 'none') {
-                            // Situation A: 重复任务
-                            // 逻辑：严格遵守结束日期。只要当前查看的日期 > 结束日期，一律不显示。
-                            if (selTime > e.getTime()) endOk = false;
-                        } else {
-                            // Situation B: 一次性任务
-                            // 逻辑：为了防遗忘，只有“已完成”且“过期”的任务才隐藏。
-                            // (如果过期了但没做，还要留着提醒你)
-                            if (t.done && selTime > e.getTime()) endOk = false;
-                        }
+                        if (t.done && selTime > e.getTime()) return false;
                     }
 
-                    return startOk && endOk;
+                    return true;
                 });
             };
             
@@ -2669,7 +2774,7 @@ const handleSync = async (direction) => {
                 handleSwipeEnd,
                 handleTileClick, editTaskProgress, handleProgressItemClick,
                 isLogoAnimating,
-                handleLogoClick,      // 👈 导出这个
+                handleLogoClick,     
                 handleFocusTabClick, 
 
             }; // 结束 return
