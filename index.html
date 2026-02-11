@@ -198,6 +198,22 @@
             font-weight: bold;
             /* 移除这里的圆角设置，交给父容器 swipe-container 的 overflow:hidden 处理 */
         }
+        /* ✅ 新增：完成按钮样式 (绿色) */
+        .complete-action {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 80px;
+            background-color: #10b981; /* 绿色 */
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            font-size: 12px;
+            font-weight: bold;
+        }
     </style> 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
@@ -440,9 +456,9 @@
                                             class="w-full bg-transparent border-none outline-none text-xs text-blue-600 dark:text-blue-400 font-medium py-0 px-0 m-0 leading-tight">
                                         
                                         <span v-else 
-                                            @dblclick="editSubtask(sub)" 
+                                            @click="handleSubtaskClick(sub)" 
                                             :class="{'line-through text-gray-400': sub.done}" 
-                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text">
+                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text select-none">
                                             {{ sub.text }}
                                         </span>
                                     </div>
@@ -508,9 +524,9 @@
                                             class="w-full bg-transparent border-none outline-none text-xs text-blue-600 dark:text-blue-400 font-medium py-0 px-0 m-0 leading-tight">
                                         
                                         <span v-else 
-                                            @dblclick="editSubtask(sub)" 
+                                            @click="handleSubtaskClick(sub)" 
                                             :class="{'line-through text-gray-400': sub.done}" 
-                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text">
+                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text select-none">
                                             {{ sub.text }}
                                         </span>
                                     </div>
@@ -726,9 +742,9 @@
                                             class="w-full bg-transparent border-none outline-none text-xs text-blue-600 dark:text-blue-400 font-medium py-0 px-0 m-0 leading-tight">
                                         
                                         <span v-else 
-                                            @dblclick="editSubtask(sub)" 
+                                            @click="handleSubtaskClick(sub)" 
                                             :class="{'line-through text-gray-400': sub.done}" 
-                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text">
+                                            class="text-xs text-gray-600 dark:text-gray-300 flex-1 break-all leading-tight pt-0.5 cursor-text select-none">
                                             {{ sub.text }}
                                         </span>
                                     </div>
@@ -783,55 +799,65 @@
             暂无包含工时的进行中任务
         </div>
         
-        <div v-for="task in activeProgressTasks" :key="task.id" 
-             @click="handleProgressItemClick(task)"
-             class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 active:scale-[0.98] transition-all">
+        <div v-for="task in activeProgressTasks" :key="task.id" class="swipe-container mb-3 shadow-sm rounded-2xl">
             
-            <div class="flex justify-between items-start mb-2">
-                <div class="flex-1 min-w-0 pr-4">
-                    <div class="flex items-center space-x-2">
-                        <div v-if="isTaskDone(task, selectedDate)" class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 flex items-center">
-                            ✓ 今日已做
+            <div @click.stop="handleProgressComplete(task)" class="complete-action">
+                完成
+            </div>
+
+            <div @touchstart="handleSwipeStart($event, task.id)"
+                 @touchmove="handleSwipeMove($event, task.id)"
+                 @touchend="handleSwipeEnd($event, task.id)"
+                 @click="swipeItemId === task.id ? swipeItemId = null : handleProgressItemClick(task)"
+                 class="swipe-content bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 active:scale-[0.98] transition-all"
+                 :style="{ transform: swipeItemId === task.id ? 'translateX(-80px)' : 'translateX(0)' }">
+                
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1 min-w-0 pr-4">
+                        <div class="flex items-center space-x-2">
+                             <div v-if="isTaskDone(task, selectedDate)" class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 flex items-center">
+                                ✓ 今日已做
+                            </div>
+
+                            <span class="font-bold text-gray-800 dark:text-gray-200 truncate" 
+                                :class="{'opacity-50 line-through': isTaskDone(task, selectedDate)}">
+                                {{ task.text }}
+                            </span>
+                            
+                            <span class="text-[9px] bg-gray-100 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded font-black shrink-0">Q{{ task.q }}</span>
                         </div>
-
-                        <span class="font-bold text-gray-800 dark:text-gray-200 truncate" 
-                            :class="{'opacity-50 line-through': isTaskDone(task, selectedDate)}">
-                            {{ task.text }}
-                        </span>
-                        
-                        <span class="text-[9px] bg-gray-100 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded font-black shrink-0">Q{{ task.q }}</span>
                     </div>
-                </div>
-                <div class="text-right shrink-0 flex flex-col items-end justify-center">
-                    <span class="text-xs font-black text-blue-600 dark:text-blue-400 mb-0.5">
-                        {{ task.duration > 0 ? Math.min(((task.accumulated || 0) / task.duration * 100), 100).toFixed(0) : 0 }}%
-                    </span>
-                    <span class="text-[10px] text-gray-400 font-medium font-mono">
-                        {{ (task.accumulated || 0).toFixed(1) }} / {{ task.duration }}h
-                    </span>
-                </div>
-            </div>
-
-            <div class="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-500 rounded-full transition-all duration-500" 
-                     :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }">
-                </div>
-            </div>
-            
-            <div v-if="task.expanded" class="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700 animate-fade-in">
-                <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">最近专注记录</p>
-                <div v-if="task.log && task.log.length > 0" class="space-y-1.5">
-                    <div v-for="(entry, index) in task.log.slice(0, 3)" :key="index" class="flex justify-between text-[10px]">
-                        <span class="text-gray-500">{{ entry.date }}</span>
-                        <span class="font-mono" 
-                            :class="entry.duration > 0 ? 'text-blue-500' : 'text-red-500'">
-                            {{ entry.duration > 0 ? '+' : '' }}{{ entry.duration.toFixed(1) }}h
+                    <div class="text-right shrink-0 flex flex-col items-end justify-center">
+                        <span class="text-xs font-black text-blue-600 dark:text-blue-400 mb-0.5">
+                            {{ task.duration > 0 ? Math.min(((task.accumulated || 0) / task.duration * 100), 100).toFixed(0) : 0 }}%
+                        </span>
+                        <span class="text-[10px] text-gray-400 font-medium font-mono">
+                            {{ (task.accumulated || 0).toFixed(1) }} / {{ Number(task.duration).toFixed(1) }}h
                         </span>
                     </div>
                 </div>
-                <p v-else class="text-[10px] text-gray-400 italic">尚无专注记录</p>
-                <div class="mt-3 flex justify-center">
-                    <button @click.stop="editTaskProgress(task)" class="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">手动微调工时</button>
+
+                <div class="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                         :style="{ width: Math.min((task.accumulated || 0) / task.duration * 100, 100) + '%' }">
+                    </div>
+                </div>
+                
+                <div v-if="task.expanded" class="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700 animate-fade-in">
+                   <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">最近专注记录</p>
+                    <div v-if="task.log && task.log.length > 0" class="space-y-1.5">
+                        <div v-for="(entry, index) in task.log.slice(0, 3)" :key="index" class="flex justify-between text-[10px]">
+                            <span class="text-gray-500">{{ entry.date }}</span>
+                            <span class="font-mono" 
+                                :class="entry.duration > 0 ? 'text-blue-500' : 'text-red-500'">
+                                {{ entry.duration > 0 ? '+' : '' }}{{ entry.duration.toFixed(1) }}h
+                            </span>
+                        </div>
+                    </div>
+                    <p v-else class="text-[10px] text-gray-400 italic">尚无专注记录</p>
+                    <div class="mt-3 flex justify-center">
+                        <button @click.stop="editTaskProgress(task)" class="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full">手动微调工时</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -986,8 +1012,8 @@
                     </div>
                     
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between">
-                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (分钟)</span>
-                        <input v-model="quadrantForm.duration" type="number" placeholder="30" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (小时)</span>
+                        <input v-model="editForm.duration" type="number" placeholder="0.5" step="0.1" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
                     </div>
 
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between space-x-2">
@@ -1093,8 +1119,8 @@
                     </div>
                     
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between">
-                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (分钟)</span>
-                        <input v-model="editForm.duration" type="number" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
+                        <span class="text-sm text-gray-800 dark:text-gray-300">预估工时 (小时)</span>
+                        <input v-model="quadrantForm.duration" type="number" placeholder="0.5" step="0.1" class="bg-gray-100 dark:bg-gray-600 rounded-lg px-2 py-1 text-sm outline-none text-gray-600 dark:text-white border-none w-20 text-right">
                     </div>
 
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between space-x-2">
@@ -1746,7 +1772,7 @@ const handleSync = async (direction) => {
                 
                 let duration = 0;
                 // ✅ 修改：输入的分钟 / 60 = 小时
-                if (quadrantForm.duration) duration = Math.abs(parseFloat(quadrantForm.duration)) / 60;
+                if (quadrantForm.duration) duration = Math.abs(parseFloat(quadrantForm.duration));
 
                 tasks.value.push({
                     id: Date.now(), 
@@ -1791,7 +1817,7 @@ const handleSync = async (direction) => {
             const openEditModal = (task) => {
                 editingTask.value = task;
                 editForm.text = task.text;
-                editForm.duration = task.duration ? Math.round(task.duration * 60) : '';
+                editForm.duration = task.duration ? task.duration : '';
                 
                 // 修改：如果任务没有日期，默认填入今天
                 const today = getTodayStr();
@@ -1811,7 +1837,7 @@ const handleSync = async (direction) => {
                 if (!editForm.text.trim()) { alert("内容不能为空"); return; }
 
                 editingTask.value.text = editForm.text;
-                editingTask.value.duration = editForm.duration ? Math.abs(parseFloat(editForm.duration)) / 60 : 0;
+                editingTask.value.duration = editForm.duration ? Math.abs(parseFloat(editForm.duration)) : 0;
                 editingTask.value.startDate = editForm.startDate;
                 editingTask.value.endDate = editForm.endDate;
                 editingTask.value.repeat = editForm.repeat;
@@ -1889,7 +1915,7 @@ const handleSync = async (direction) => {
                 const now = Date.now();
                 
                 // 1. 判断是否双击 (间隔 < 300ms)
-                if (lastTap.value.id === task.id && (now - lastTap.value.time) < 300) {
+                if (lastTap.value.id === task.id && (now - lastTap.value.time) < 180) {
                     // --- 双击逻辑：修改工时 ---
                     clearTimeout(taskClickTimer); // 马上取消刚才那个准备执行的单击动作
                     editTaskProgress(task);       // 唤起修改工时弹窗 (和你进度页用的是同一个函数)
@@ -1907,7 +1933,24 @@ const handleSync = async (direction) => {
                             });
                         }
                         task.expanded = !task.expanded;
-                    }, 300);
+                    }, 180);
+                }
+            };
+
+            // ✅ 新增：专门处理子任务的双击逻辑
+            const lastSubTap = ref({ id: null, time: 0 });
+
+            const handleSubtaskClick = (sub) => {
+                const now = Date.now();
+                // 判断是否是同一个子任务，且间隔小于 300ms
+                if (lastSubTap.value.id === sub.id && (now - lastSubTap.value.time) < 300) {
+                    // 触发编辑
+                    editSubtask(sub);
+                    // 重置状态
+                    lastSubTap.value = { id: null, time: 0 };
+                } else {
+                    // 记录第一次点击
+                    lastSubTap.value = { id: sub.id, time: now };
                 }
             };
 
@@ -2053,16 +2096,26 @@ const handleSync = async (direction) => {
 
             const progressTasks = computed(() => tasks.value.filter(t => t.duration > 0));
             
-            // ✅ 修改逻辑：进度页是“长期看板”
-            // 只要 【累计工时 < 目标工时】，它就永远属于“进行中”，不管今天有没有打勾
+            /// ✅ 修改逻辑：
+            // 进行中 = (工时没跑满) 且 (没被手动标记完成)
             const activeProgressTasks = computed(() => {
-                return progressTasks.value.filter(t => (t.accumulated || 0) < t.duration);
+                return progressTasks.value.filter(t => !t.done && (t.accumulated || 0) < t.duration);
             });
 
-            // 只有 【累计工时 >= 目标工时】，才算真正的“结项/已完成”
+            // 已完成 = (工时跑满了) 或者 (被手动标记完成了)
             const completedProgressTasks = computed(() => {
-                return progressTasks.value.filter(t => (t.accumulated || 0) >= t.duration);
+                return progressTasks.value.filter(t => t.done || (t.accumulated || 0) >= t.duration);
             });
+
+            // ✅ 新增：处理左滑点击“完成”
+            const handleProgressComplete = (task) => {
+                if(confirm(`确认要提前结束任务 "${task.text}" 吗？`)) {
+                    task.done = true; // 标记为完成
+                    swipeItemId.value = null; // 收起滑块
+                    
+                    if(navigator.vibrate) navigator.vibrate(50);
+                }
+            };
 
             // ⬇️⬇️⬇️ 【修改】进度页统计逻辑：只看总投入时长 + 达成项目数 ⬇️⬇️⬇️
             const progressStats = computed(() => {
@@ -2558,6 +2611,7 @@ const handleSync = async (direction) => {
                 showExpiredCountdown,
                 activeProgressTasks,
                 completedProgressTasks,
+                handleProgressComplete,
                 activeInboxTasks,   
                 completedInboxTasks,
                 activeRecurringQuadrantTasks,
@@ -2579,7 +2633,7 @@ const handleSync = async (direction) => {
                 startPress, cancelPress, currentFocusTask,
                 editingTask, openEditModal, closeEditModal, deleteCurrentTask, editForm, saveEditTask,
                 showSyncModal, githubToken, gistId, handleSync, syncStatus,
-                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, addSubtask, toggleSubtask, deleteSubtask, editSubtask,handleBackgroundClick,
+                handleTouchStart, handleTouchMove, handleTouchEnd, handleTaskClick, handleSubtaskClick, addSubtask, toggleSubtask, deleteSubtask, editSubtask,handleBackgroundClick,
                 showProgressModal, 
                 progressForm, 
                 progressInputRef, 
