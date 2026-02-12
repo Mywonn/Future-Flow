@@ -77,6 +77,11 @@
             background-color: #111827; 
             overscroll-behavior: none; 
             -webkit-overflow-scrolling: touch;
+            /* 🚀 新增：强制禁用浏览器的默认双击手势 */
+            touch-action: manipulation; 
+            
+            /* 🚀 新增：防止 iOS 自动调整字体大小导致的布局错位 */
+            -webkit-text-size-adjust: 100%;
         }
 
         #app {
@@ -235,6 +240,17 @@
             100% { transform: translateX(200%); }
         }
     </style>   
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var splash = document.getElementById('splash-screen');
+                if (splash) {
+                    splash.style.opacity = '0';
+                    setTimeout(function(){ try { splash.remove(); } catch(e){} }, 500);
+                }
+            }, 1500);
+        });
+    </script>
 <div id="app" 
      class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" 
      @click="handleBackgroundClick"
@@ -621,10 +637,13 @@
                         <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">近期重要</span>
                     </div>
 
-                    <div class="flex-1 overflow-x-auto whitespace-nowrap flex items-start space-x-2 no-scrollbar pb-1">
+                    <div ref="upcomingScroll" 
+                        class="flex-1 overflow-x-auto whitespace-nowrap flex items-start gap-2 pr-2 no-scrollbar pb-1" 
+                        @touchstart="pauseUpcoming" 
+                        @touchend="resumeUpcoming">
                         <div v-if="homeUpcomingList.length === 0" class="w-full text-xs text-gray-300 text-center py-6">无近期事项</div>
                         
-                        <div v-for="day in homeUpcomingList" :key="day.id" 
+                        <div v-for="(day, index) in displayUpcomingList" :key="index" 
                             class="inline-flex flex-col shrink-0 w-[43%] h-full bg-blue-50/60 dark:bg-gray-800 rounded-2xl px-2 py-2.5 relative overflow-hidden active:scale-95 transition-transform border border-gray-100 dark:border-gray-800/50">
                             
                             <div class="absolute -right-2 -bottom-2 text-5xl opacity-[0.03] select-none pointer-events-none rotate-12">⏳</div>
@@ -2145,6 +2164,16 @@ const handleSync = async (direction) => {
             
             // 辅助：获取天数
             const getD = (c) => getDaysUntilData(c).days;
+            // ✅ 新增：用于显示的“双倍列表”，实现无缝滚动
+            // 如果列表项少于3个，就不复制（因为不会滚）；如果多于3个，就复制一份拼接在后面
+            const displayUpcomingList = computed(() => {
+                const list = homeUpcomingList.value;
+                // 只有当开启滚动时 (>=3)，才复制列表
+                if (list.length >= 3) {
+                    return [...list, ...list]; // 把数组复制一份拼起来 [A,B,C] -> [A,B,C, A,B,C]
+                }
+                return list;
+            });
 
             // 1. 首页列表：只显示 0 <= 天数 <= 10 的事件 (未来10天内)
             const homeUpcomingList = computed(() => {
@@ -2155,6 +2184,8 @@ const handleSync = async (direction) => {
                     })
                     .sort((a, b) => getD(a) - getD(b));
             });
+
+            /* 近期重要自动播放逻辑已移动至 getDaysUntilData 定义之后，避免初始化顺序导致的白屏 */
 
             // 2. 倒数日页 - 即将到来 (所有未来事件，按时间排序，不分置顶)
             const upcomingList = computed(() => countdowns.value
@@ -2518,6 +2549,80 @@ const handleSync = async (direction) => {
                 return { days, targetDateStr: `${y}-${m}-${d}` };
             };
 
+            // ✅ 新增：当同一天事件数量 >= 3 时，右下「近期重要」区域自动滚动播放
+            const upcomingScroll = ref(null);
+            const upcomingAutoplay = computed(() => {
+                const byDay = {};
+                homeUpcomingList.value.forEach(item => {
+                    const key = getDaysUntilData(item).targetDateStr;
+                    byDay[key] = (byDay[key] || 0) + 1;
+                });
+                return Object.values(byDay).some(c => c >= 3);
+            });
+            const upcomingPaused = ref(false);
+            let upcomingRAF = 0;
+            let scrollPos = 0; 
+
+            const startUpcomingAutoplay = () => {
+                if (currentTab.value !== 'now' || !upcomingAutoplay.value) return;
+                const el = upcomingScroll.value;
+                if (!el) return;
+                
+                if (upcomingRAF) { cancelAnimationFrame(upcomingRAF); upcomingRAF = 0; }
+                
+                scrollPos = el.scrollLeft; 
+                const speed = 0.3; // 保持你喜欢的速度
+                
+                const step = () => {
+                    if (upcomingPaused.value) {
+                        upcomingRAF = requestAnimationFrame(step);
+                        return;
+                    }
+                    
+                    scrollPos += speed;
+                    el.scrollLeft = scrollPos;
+                    
+                    // ✅ 核心修改：无缝循环逻辑
+                    // 以前是 (scrollPos >= max - 1)
+                    // 现在是：只要滚动的距离超过了“内容总宽度的一半”，就立刻归零
+                    // 因为内容是双倍的，一半的宽度正好就是“原始列表”的长度
+                    const resetThreshold = el.scrollWidth / 2;
+                    
+                    // ✅ 核心修复：精度保留
+                    if (scrollPos >= resetThreshold) {
+                        // 不要直接设为 0，而是减去阈值
+                        // 例子：如果滚到了 500.3，阈值是 500
+                        // 500.3 - 500 = 0.3 (这样保留了 0.3 的动量，不会卡顿)
+                        scrollPos -= resetThreshold; 
+                        el.scrollLeft = scrollPos;
+                    }
+                    
+                    upcomingRAF = requestAnimationFrame(step);
+                };
+                upcomingRAF = requestAnimationFrame(step);
+            };
+
+            const stopUpcomingAutoplay = () => {
+                if (upcomingRAF) cancelAnimationFrame(upcomingRAF);
+                upcomingRAF = 0;
+            };
+            const pauseUpcoming = () => { upcomingPaused.value = true; };
+            const resumeUpcoming = () => { upcomingPaused.value = false; };
+            watch([upcomingAutoplay, currentTab, homeUpcomingList], () => {
+                nextTick(() => {
+                    if (currentTab.value === 'now' && upcomingAutoplay.value && homeUpcomingList.value.length) {
+                        startUpcomingAutoplay();
+                    } else {
+                        stopUpcomingAutoplay();
+                    }
+                });
+            }, { deep: true, immediate: true });
+            watch(() => upcomingScroll.value, (el) => {
+                if (el && currentTab.value === 'now' && upcomingAutoplay.value && homeUpcomingList.value.length) {
+                    startUpcomingAutoplay();
+                }
+            });
+
             // ✅ 修复版：正确处理重复任务的结束日期
             // ✅ 修复版：四象限的任务获取
             const getTasksByQ = (q) => {
@@ -2774,7 +2879,8 @@ const handleSync = async (direction) => {
                 completedInboxTasks,
                 activeRecurringQuadrantTasks,
                 activeQuadrantTasks, 
-                homeUpcomingList, upcomingList, expiredList,
+                displayUpcomingList, 
+                homeUpcomingList, upcomingList, expiredList, upcomingScroll, pauseUpcoming, resumeUpcoming,
                 quadrantTitles, progressStats, progressTasks, 
                 currentYear, currentMonth, lunarMonthStr, daysInMonth, firstDayOfWeek,
                 selectedDate, changeMonth, jumpToToday, selectDate, getDayClass, isSameDate,
@@ -2830,6 +2936,25 @@ const handleSync = async (direction) => {
     });
 
     app.mount('#app');
+    // 1. 全局暴力禁止双击 (Double Tap)
+    // 使用 { passive: false } 确保 preventDefault 能生效
+    document.addEventListener('dblclick', function(event) {
+        event.preventDefault();
+    }, { passive: false });
+
+    // 2. 禁止双指缩放 (Pinch to Zoom)
+    // 即使你写了 meta viewport，iOS 10+ 依然允许手势缩放，这会导致布局错乱
+    document.addEventListener('gesturestart', function(event) {
+        event.preventDefault();
+    }, { passive: false });
+
+    // 3. 修复键盘收起后，页面没回弹导致的“假死”或“可滑动”状态
+    // 当输入框失焦（键盘收起）时，强制重置滚动位置
+    document.addEventListener('focusout', function() {
+        setTimeout(() => {
+            window.scrollTo(0, 0); // 强制滚回顶部
+        }, 100);
+    });
 </script>
 </body>
 </html>
