@@ -2692,23 +2692,24 @@ const handleSync = async (direction) => {
             // ✅ 修改：增加防抖逻辑，完美区分单击和双击
             let clickTimer = null; // 用于存储定时器
 
+            // ✅ 修改：专注页左下角交互逻辑
+            // 需求：单击卡片本身不弹窗（只允许在四象限页修改），保留双击改工时，保留圆点点击完成
             const handleTileClick = (task) => {
                 const now = Date.now();
                 
-                // 判断是否双击
+                // 1. 判断是否双击 (间隔 < 300ms)
                 if (lastTap.value.id === task.id && (now - lastTap.value.time) < 300) {
-                    // --- 双击逻辑 ---
-                    clearTimeout(clickTimer); // 清除单击的定时器，阻止弹窗
-                    editTaskProgress(task);   // 执行修改工时
-                    lastTap.value = { id: null, time: 0 }; // 重置
+                    // --- 双击逻辑：修改工时 ---
+                    clearTimeout(clickTimer); // 清除潜在的定时器
+                    editTaskProgress(task);   // 唤起修改工时弹窗
+                    lastTap.value = { id: null, time: 0 }; // 重置状态
                 } else {
                     // --- 单击逻辑 ---
+                    // 仅记录点击时间，用于检测下一次是否是双击
                     lastTap.value = { id: task.id, time: now };
                     
-                    // 延迟 300ms 执行单击动作，给双击留出反应时间
-                    clickTimer = setTimeout(() => {
-                        openEditModal(task); 
-                    }, 300);
+                    // ❌ 移除：clickTimer = setTimeout(() => { openEditModal(task); }, 300);
+                    // 现在单击卡片空白处什么都不会发生，完美符合你的要求。
                 }
             };
 
