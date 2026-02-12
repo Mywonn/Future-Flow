@@ -238,7 +238,7 @@
 <div id="app" 
      class="max-w-md mx-auto w-full h-full flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative transition-colors duration-300" 
      @click="handleBackgroundClick"
-     @dblclick.prevent
+     @dblclick.stop.prevent
      v-cloak>
 
 <div class="relative bg-blue-600 dark:bg-gray-800 text-white shadow-md z-40 flex-shrink-0 transition-all duration-300 border-b dark:border-gray-700 safe-top">
@@ -390,7 +390,8 @@
                         今日专注
                     </div>
                     <input v-model="newTask" @keyup.enter="addTask" 
-                    @click.stop
+                    @click.stop @touchstart.stop
+                    autocomplete="off"
                     type="text" placeholder="添加待办..." class="bg-transparent flex-1 px-3 py-1 outline-none text-sm min-w-0 dark:text-white dark:placeholder-gray-500 font-medium text-gray-700 placeholder-gray-400">
                     
                     <div class="relative mr-1 h-full flex items-center">
@@ -567,7 +568,7 @@
 
             <div class="shrink-0 h-36 bg-gray-50 dark:bg-gray-950 grid grid-cols-2 gap-0 px-4 pb-3 pt-2">
                 
-                <div class="flex flex-col overflow-hidden border-r border-gray-200 dark:border-gray-800 pr-3">
+                <div class="flex flex-col overflow-hidden border-r border-gray-200 dark:border-gray-800 pr-3" @dblclick.stop style="touch-action: none;">
                     <div class="py-2 flex items-center justify-between shrink-0">
                          <div class="flex items-center">
                             <div class="h-2 w-2 bg-orange-400 rounded-full mr-2"></div>
@@ -614,7 +615,7 @@
                     </div>
                 </div>
 
-                <div class="flex flex-col overflow-hidden pl-3">
+                <div class="flex flex-col overflow-hidden pl-3" @dblclick.stop style="touch-action: none;">
                     <div class="py-2 flex items-center shrink-0">
                         <div class="h-2 w-2 bg-pink-400 rounded-full mr-2"></div>
                         <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">近期重要</span>
@@ -1019,9 +1020,9 @@
             <div class="p-4 space-y-4">
                 <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm space-y-px">
                     
-                    <div class="py-3 border-b border-gray-100 dark:border-gray-600">
+                    <div class="py-3 border-b border-gray-100 dark:border-gray-600" @click.stop>
                         <label class="block text-[10px] text-gray-400 mb-1">任务内容</label>
-                        <input v-model="editForm.text" type="text" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
+                        <input v-model="editForm.text" type="text" autocomplete="off" @click.stop @touchstart.stop class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
                     </div>
                     
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between">
@@ -1096,9 +1097,9 @@
             </div>
             
             <div class="p-4 space-y-4">
-                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm">
+                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm" @click.stop>
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center">
-                        <input v-model="countdownForm.name" type="text" placeholder="事件名称 (如: 生日)" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
+                        <input v-model="countdownForm.name" type="text" autocomplete="off" @click.stop @touchstart.stop placeholder="事件名称 (如: 生日)" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
                     </div>
                     <div class="py-3 flex items-center justify-between">
                         <span class="text-sm text-gray-800 dark:text-gray-300">日期</span>
@@ -1153,9 +1154,9 @@
                     添加到: <span class="font-bold" :class="{'text-red-500': quadrantForm.q===1, 'text-blue-500': quadrantForm.q===2, 'text-yellow-500': quadrantForm.q===3}">{{ quadrantTitles[quadrantForm.q-1] }}</span>
                 </div>
 
-                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm space-y-px">
+                <div class="bg-white dark:bg-gray-700 rounded-xl overflow-hidden px-4 shadow-sm space-y-px" @click.stop>
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center">
-                        <input v-model="quadrantForm.text" type="text" placeholder="准备做什么？" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
+                        <input v-model="quadrantForm.text" type="text" autocomplete="off" @click.stop @touchstart.stop placeholder="准备做什么？" class="w-full bg-transparent outline-none text-base text-gray-800 dark:text-white placeholder-gray-400">
                     </div>
                     
                     <div class="py-3 border-b border-gray-100 dark:border-gray-600 flex items-center justify-between">
@@ -2037,10 +2038,19 @@ const handleSync = async (direction) => {
             const handleBackgroundClick = (e) => {
                 const targetTag = e.target.tagName;
                 
-                // 如果点击的是按钮、链接或其他交互元素，通常不需要强制失焦，交给系统默认行为
-                // 但点击 div, section, body 等空白容器时，强制收起键盘
+                // ✅ 1. 如果点击的是输入框、按钮或任何交互元素，绝对不处理失焦
+                if (e.target.closest('input, textarea, button, a, [role="button"]')) {
+                    return;
+                }
+
+                // ✅ 2. 只有点击真正的空白容器层时，才考虑收起键盘
                 if (targetTag === 'DIV' || targetTag === 'SECTION' || targetTag === 'BODY' || targetTag === 'HTML') {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+                        // ✅ 3. 额外保险：如果点击的是当前聚焦输入框的父容器，不触发失焦
+                        // 这样即使点击了输入框边缘的 padding 也会保持聚焦
+                        if (e.target.contains(document.activeElement)) {
+                            return;
+                        }
                         document.activeElement.blur();
                     }
                 }
