@@ -2166,12 +2166,27 @@ const handleSync = async (direction) => {
             const getD = (c) => getDaysUntilData(c).days;
             // ✅ 新增：用于显示的“双倍列表”，实现无缝滚动
             // 如果列表项少于3个，就不复制（因为不会滚）；如果多于3个，就复制一份拼接在后面
+            // 只有当满足“自动播放条件”时，才把列表复制一份，否则保持原样
             const displayUpcomingList = computed(() => {
                 const list = homeUpcomingList.value;
-                // 只有当开启滚动时 (>=3)，才复制列表
-                if (list.length >= 3) {
-                    return [...list, ...list]; // 把数组复制一份拼起来 [A,B,C] -> [A,B,C, A,B,C]
+                
+                // 1. 即使总数 > 3，也要先计算是否满足“同天 >= 3”的严格条件
+                const byDay = {};
+                list.forEach(item => {
+                    // computed 是懒执行的，所以这里调用定义在后面的 getDaysUntilData 是安全的
+                    const key = getDaysUntilData(item).targetDateStr;
+                    byDay[key] = (byDay[key] || 0) + 1;
+                });
+                
+                // 2. 判断是否触发滚动
+                const shouldScroll = Object.values(byDay).some(c => c >= 3);
+
+                // 3. 只有需要滚动时，才复制列表实现无缝循环
+                if (shouldScroll) {
+                    return [...list, ...list]; 
                 }
+                
+                // 4. 不需要滚动时，只显示原始的单份列表 (防止出现滑到后面是重复内容的情况)
                 return list;
             });
 
