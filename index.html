@@ -2183,41 +2183,68 @@ const handleSync = async (direction) => {
 
             
             
+            // ✅ 升级版 Top List：包含所有【安排在今天】的 Q1-Q3 任务
             const activeRecurringQuadrantTasks = computed(() => {
                 return tasks.value.filter(t => {
+                    // 1. 只看 Q1, Q2, Q3
                     if (![1, 2, 3].includes(t.q)) return false;
-                    if (!t.repeat || t.repeat === 'none') return false;
                     
-                    // 1. 如果今天打卡了，隐藏
+                    // 2. 移除旧限制：不再要求必须是重复任务 (Now supports One-off!)
+                    // if (!t.repeat || t.repeat === 'none') return false; <--- 已删除
+                    
+                    // 3. 过滤已完成/工时已满
                     if (isTaskDone(t, selectedDate.value)) return false;
-                    
-                    // ✅ 新增：如果【工时已经跑满了】，也隐藏（不再出现）
                     if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false;
 
+                    // 4. 核心：只要 checkTaskVisible 说它今天该做，就放进来
                     return checkTaskVisible(t, selectedDate.value);
                 }).sort((a, b) => a.q - b.q);
             });
            
 
+            // ✅ 升级版 Bottom List：方案 A (去重 + 未来池 + 积压池)
             const activeQuadrantTasks = computed(() => {
                 const sel = new Date(selectedDate.value);
                 sel.setHours(0, 0, 0, 0);
                 const selTime = sel.getTime();
 
                 return tasks.value.filter(t => {
-                    if (t.q <= 0 || isTaskDone(t, selectedDate.value)) return false;
+                    // 1. 基础过滤
+                    if (t.q <= 0) return false; 
+                    if (t.done) return false; 
+                    if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false; 
 
-                    // ✅ 新增：如果【工时已经跑满了】，也隐藏
-                    if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false;
+                    // 2. 【去重熔断】：如果它已经出现在上方的“今日列表”里，这里就不显示
+                    // (如果是 Q4 任务，上方不收，所以 Q4 依然会流到这里，符合逻辑)
+                    if ([1,2,3].includes(t.q) && checkTaskVisible(t, selectedDate.value)) return false;
 
-                    if (t.startDate) {
-                        const s = new Date(t.startDate);
-                        s.setHours(0, 0, 0, 0);
-                        const buffer = 3 * 24 * 60 * 60 * 1000; 
-                        if (selTime < (s.getTime() - buffer)) return false;
+                    // 3. 【过期熔断】：如果结束日期早于今天，直接隐藏 (Clean Policy)
+                    if (t.endDate) {
+                        const e = new Date(t.endDate);
+                        e.setHours(0,0,0,0);
+                        if (selTime > e.getTime()) return false; 
                     }
+
+                    // 4. 到这里剩下的任务只可能是：
+                    // a) 未来任务 (startDate > 今天)
+                    // b) 积压任务 (没有 startDate)
+                    // c) Q4 的今日任务 (因为 Top List 不要 Q4)
                     return true;
-                }).sort((a, b) => a.q - b.q); 
+
+                }).sort((a, b) => {
+                     // 5. 智能排序
+                     // 优先展示有日期的 (未来任务)，把没日期的 (积压任务) 放到最后
+                     if (a.startDate && !b.startDate) return -1;
+                     if (!a.startDate && b.startDate) return 1;
+                     
+                     // 如果都有日期，按日期远近排 (最近的未来在最前)
+                     if (a.startDate && b.startDate) {
+                         return new Date(a.startDate) - new Date(b.startDate);
+                     }
+                     
+                     // 如果都没日期，按 Q 值排
+                     return a.q - b.q; 
+                }); 
             });
             
             // 辅助：获取天数
@@ -2496,73 +2523,78 @@ const handleSync = async (direction) => {
                 // 4. 兜底
                 return false;
             };
-            // ✅ 核心算法：判断任务在指定日期是否可见（支持间隔重复）
+            
+            // ✅ 核心算法：判断任务在指定日期是否可见（支持间隔重复 & 一次性日期范围）
             const checkTaskVisible = (task, targetDateObj) => {
-                // 1. 如果没有设置重复，且没有设置日期，或者日期就是今天 -> 显示
-                if (!task.repeat || task.repeat === 'none') {
-                     // 如果是一次性任务，这里只负责日期匹配，外部逻辑负责过期隐藏
-                    return true; 
-                }
-
-                // 2. 如果没有开始日期，默认从创建那天算起（但为了稳妥，这里建议必须有 startDate）
-                // 如果用户没填 startDate，我们默认视为“今天可见”
-                if (!task.startDate) return true;
-
-                // --- 统一时间为凌晨 00:00:00 以便比较 ---
                 const target = new Date(targetDateObj);
                 target.setHours(0, 0, 0, 0);
+                const targetTime = target.getTime();
+
+                // --- 1. 一次性任务 (Non-Recurring) 的新逻辑 ---
+                if (!task.repeat || task.repeat === 'none') {
+                     // 如果没填开始日期，视为“积压(Backlog)”，不属于“今天”
+                     if (!task.startDate) return false; 
+                     
+                     const start = new Date(task.startDate);
+                     start.setHours(0,0,0,0);
+                     // 如果还没到开始日期 -> 不显示
+                     if (targetTime < start.getTime()) return false; 
+                     
+                     // 如果设置了结束日期，且今天已经超过了结束日期 -> 不显示 (过期)
+                     if (task.endDate) {
+                         const end = new Date(task.endDate);
+                         end.setHours(0,0,0,0);
+                         if (targetTime > end.getTime()) return false; 
+                     }
+                     
+                     // 否则：今天在 [开始, 结束] 范围内 -> 显示
+                     return true; 
+                }
+
+                // --- 2. 重复任务 (Recurring) 的逻辑 (保持不变) ---
                 
+                // 如果没有开始日期，默认从创建那天算起
+                if (!task.startDate) return true;
+
                 const start = new Date(task.startDate);
                 start.setHours(0, 0, 0, 0);
 
                 const end = task.endDate ? new Date(task.endDate) : null;
                 if (end) end.setHours(0, 0, 0, 0);
 
-                const targetTime = target.getTime();
                 const startTime = start.getTime();
 
-                // 3. 基础范围检查
-                if (targetTime < startTime) return false; // 还没开始
-                if (end && targetTime > end.getTime()) return false; // 已经结束 (一直重复 = 没有 end)
+                // 基础范围检查
+                if (targetTime < startTime) return false; 
+                if (end && targetTime > end.getTime()) return false; 
 
-                // 4. 间隔算法
+                // 间隔算法
                 const interval = parseInt(task.repeatInterval || 1);
                 
                 if (task.repeat === 'day') {
-                    // 计算相差天数
                     const diffDays = Math.floor((targetTime - startTime) / (24 * 60 * 60 * 1000));
-                    // 只要天数差能被间隔整除，就显示
-                    // 例如：每2天。第0天显示，第1天隐藏，第2天显示...
                     return diffDays % interval === 0;
                 }
                 
                 if (task.repeat === 'week') {
                     const diffWeeks = Math.floor((targetTime - startTime) / (7 * 24 * 60 * 60 * 1000));
-                    // 必须满足两个条件：
-                    // A. 必须是同一个星期几 (getDay 相同)
-                    // B. 必须是间隔的周数 (diffWeeks % interval === 0)
                     return target.getDay() === start.getDay() && (diffWeeks % interval === 0);
                 }
 
                 if (task.repeat === 'month') {
-                    // 计算月份差
                     let diffMonths = (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
-                    // 逻辑同上：
-                    // A. 日期号数必须相同 (比如都是15号)
-                    // B. 月份差能被整除
                     return target.getDate() === start.getDate() && (diffMonths % interval === 0);
                 }
 
                 if (task.repeat === 'year') {
                     const diffYears = target.getFullYear() - start.getFullYear();
-                    // A. 月份和日期必须相同
-                    // B. 年份差能被整除
                     const isSameDate = target.getMonth() === start.getMonth() && target.getDate() === start.getDate();
                     return isSameDate && (diffYears % interval === 0);
                 }
 
                 return true;
             };
+
             const hasTask = (date) => { const key = formatDateKey(date); return tasks.value.some(t => t.date === key && !t.done); };
             // --- 核心升级：支持农历和重复周期的计算 ---
             // --- 核心升级：支持农历和重复周期的计算 ---
