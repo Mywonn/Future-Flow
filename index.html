@@ -2183,26 +2183,24 @@ const handleSync = async (direction) => {
 
             
             
-            // ✅ 升级版 Top List：包含所有【安排在今天】的 Q1-Q3 任务
+            // ✅ 升级版 Top List：只包含【安排在今天】的 Q1-Q3 (高优) 任务
             const activeRecurringQuadrantTasks = computed(() => {
                 return tasks.value.filter(t => {
-                    // 1. 只看 Q1, Q2, Q3
+                    // 1. 严格只看 Q1, Q2, Q3 (Q4 滚去下面)
                     if (![1, 2, 3].includes(t.q)) return false;
                     
-                    // 2. 移除旧限制：不再要求必须是重复任务 (Now supports One-off!)
-                    // if (!t.repeat || t.repeat === 'none') return false; <--- 已删除
-                    
-                    // 3. 过滤已完成/工时已满
+                    // 2. 过滤已完成/工时已满
                     if (isTaskDone(t, selectedDate.value)) return false;
                     if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false;
 
-                    // 4. 核心：只要 checkTaskVisible 说它今天该做，就放进来
+                    // 3. 核心：只要 checkTaskVisible 说它今天该做，就放进来
+                    // (现在支持了一次性任务，所以不一定要有 repeat 属性)
                     return checkTaskVisible(t, selectedDate.value);
                 }).sort((a, b) => a.q - b.q);
             });
            
 
-            // ✅ 升级版 Bottom List：方案 A (去重 + 未来池 + 积压池)
+            // ✅ 升级版 Bottom List：方案 A (去重 + Q4收容 + 未来池)
             const activeQuadrantTasks = computed(() => {
                 const sel = new Date(selectedDate.value);
                 sel.setHours(0, 0, 0, 0);
@@ -2214,30 +2212,29 @@ const handleSync = async (direction) => {
                     if (t.done) return false; 
                     if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false; 
 
-                    // 2. 【去重熔断】：如果它已经出现在上方的“今日列表”里，这里就不显示
-                    // (如果是 Q4 任务，上方不收，所以 Q4 依然会流到这里，符合逻辑)
+                    // 2. 【去重熔断】：
+                    // 逻辑：如果这个任务【是 Q1-Q3】 且 【今天该做】，那它肯定在上面显示了，这里就隐藏。
+                    // 巧妙之处：如果任务是 Q4，即使【今天该做】，前一个条件不满足，这里不会返回 false，
+                    // 于是 Q4 就会顺利流到这个列表里！解决了你的逻辑差问题。
                     if ([1,2,3].includes(t.q) && checkTaskVisible(t, selectedDate.value)) return false;
 
-                    // 3. 【过期熔断】：如果结束日期早于今天，直接隐藏 (Clean Policy)
+                    // 3. 【过期熔断】：如果结束日期早于今天，直接隐藏，保持清爽
                     if (t.endDate) {
                         const e = new Date(t.endDate);
                         e.setHours(0,0,0,0);
                         if (selTime > e.getTime()) return false; 
                     }
 
-                    // 4. 到这里剩下的任务只可能是：
-                    // a) 未来任务 (startDate > 今天)
-                    // b) 积压任务 (没有 startDate)
-                    // c) Q4 的今日任务 (因为 Top List 不要 Q4)
                     return true;
 
                 }).sort((a, b) => {
-                     // 5. 智能排序
+                     // 4. 智能排序
                      // 优先展示有日期的 (未来任务)，把没日期的 (积压任务) 放到最后
                      if (a.startDate && !b.startDate) return -1;
                      if (!a.startDate && b.startDate) return 1;
                      
                      // 如果都有日期，按日期远近排 (最近的未来在最前)
+                     // 这样“今天的 Q4”因为日期最近，会排在第一个！
                      if (a.startDate && b.startDate) {
                          return new Date(a.startDate) - new Date(b.startDate);
                      }
@@ -2532,15 +2529,15 @@ const handleSync = async (direction) => {
 
                 // --- 1. 一次性任务 (Non-Recurring) 的新逻辑 ---
                 if (!task.repeat || task.repeat === 'none') {
-                     // 如果没填开始日期，视为“积压(Backlog)”，不属于“今天”
+                     // 规则 A：如果没有开始日期，视为“积压(Backlog)”，不属于“今天” -> 返回 false
                      if (!task.startDate) return false; 
                      
                      const start = new Date(task.startDate);
                      start.setHours(0,0,0,0);
-                     // 如果还没到开始日期 -> 不显示
+                     // 规则 B：如果还没到开始日期 -> 不显示
                      if (targetTime < start.getTime()) return false; 
                      
-                     // 如果设置了结束日期，且今天已经超过了结束日期 -> 不显示 (过期)
+                     // 规则 C：如果设置了结束日期，且今天已经超过了结束日期 -> 不显示 (过期)
                      if (task.endDate) {
                          const end = new Date(task.endDate);
                          end.setHours(0,0,0,0);
