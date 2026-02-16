@@ -2209,8 +2209,14 @@ const handleSync = async (direction) => {
                 return tasks.value.filter(t => {
                     // 1. 基础过滤
                     if (t.q <= 0) return false; 
-                    if (t.done) return false; 
-                    if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false; 
+                    
+                    // ❌ 删除旧代码 (旧逻辑只防住了全局完成，没防住重复任务的今日打卡)
+                    // if (t.done) return false; 
+                    // if (t.duration > 0 && (t.accumulated || 0) >= t.duration) return false; 
+
+                    // ✅ 新增核心修复：统一使用 isTaskDone 严防死守
+                    // 只要在当天算作“已完成” (包括重复任务今日已勾选)，直接隐藏！
+                    if (isTaskDone(t, selectedDate.value)) return false;
 
                     // 2. 【去重熔断】：
                     // 逻辑：如果这个任务【是 Q1-Q3】 且 【今天该做】，那它肯定在上面显示了，这里就隐藏。
@@ -3167,3 +3173,4 @@ const handleSync = async (direction) => {
 </script>
 </body>
 </html>
+
